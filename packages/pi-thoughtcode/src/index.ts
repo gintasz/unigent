@@ -24,31 +24,34 @@ import {
 } from "@earendil-works/pi-tui";
 import { isAbsolute, relative } from "node:path";
 import {
+  VIBE_CALL_TOOL_PARAMETERS,
   VIBE_CALL_TOOL_DESCRIPTION,
+  VIBE_RETURN_TOOL_PARAMETERS,
   VIBE_RETURN_TOOL_DESCRIPTION,
   buildVibeCallSubagentPrompt,
+  type ThoughtcodeToolParameter,
   type VibeCallArgs,
   type VibeReturnArgs,
 } from "thoughtcode-core";
-import { Type, type Static } from "typebox";
+import { Type, type Static, type TObject, type TString } from "typebox";
 
-const vibeCallParameters = Type.Object({
-  program_file_path: Type.String({
-    description: "Path to the Thoughtcode program file the subagent must read.",
-  }),
-  name: Type.String({
-    description: "Name of the Thoughtcode VIBEMETHOD to call.",
-  }),
-  args: Type.String({
-    description: "Serialized arguments for the target VIBEMETHOD.",
-  }),
-});
+function thoughtcodeParametersToTypeBox<const TParameters extends readonly ThoughtcodeToolParameter[]>(
+  parameters: TParameters,
+): TObject<{ [TParameterName in TParameters[number]["name"]]: TString }> {
+  return Type.Object(
+    Object.fromEntries(
+      parameters.map((parameter) => [
+        parameter.name,
+        Type.String({
+          description: parameter.description,
+        }),
+      ]),
+    ) as { [TParameterName in TParameters[number]["name"]]: TString },
+  );
+}
 
-const vibeReturnParameters = Type.Object({
-  value: Type.String({
-    description: "Serialized return value for the current Thoughtcode VIBEMETHOD.",
-  }),
-});
+const vibeCallParameters = thoughtcodeParametersToTypeBox(VIBE_CALL_TOOL_PARAMETERS);
+const vibeReturnParameters = thoughtcodeParametersToTypeBox(VIBE_RETURN_TOOL_PARAMETERS);
 
 type VibeCallParams = Static<typeof vibeCallParameters>;
 type VibeReturnParams = Static<typeof vibeReturnParameters>;
@@ -73,6 +76,7 @@ export interface VibeCallTranscriptItem {
   t: number;
   role: "thinking" | "assistant" | "tool" | "return" | "error" | "status";
   text: string;
+  toolCallId?: string;
 }
 
 export interface VibeCallProgress {
@@ -289,6 +293,19 @@ function previewToolArgs(toolName: string, args: unknown): string {
   return truncateEnd(JSON.stringify(record), 80);
 }
 
+function vibeCallDetailsFromToolResult(result: unknown): VibeCallDetails | undefined {
+  const details = (result as { details?: unknown } | undefined)?.details as Partial<VibeCallDetails> | undefined;
+  if (details?.kind !== "vibecall" || typeof details.runId !== "string") {
+    return undefined;
+  }
+  return details as VibeCallDetails;
+}
+
+function formatNestedVibeCallTool(details: VibeCallDetails): string {
+  const args = details.args.trim() ? ` ${truncateEnd(details.args, 80)}` : "";
+  return `VIBECALL run=${details.runId} ${details.name}${args}`;
+}
+
 function firstTextContent(content: unknown): string {
   return contentBlocksText(content, "text");
 }
@@ -393,6 +410,20 @@ function updateProgressFromChildEvent(progress: VibeCallProgress, event: AgentSe
     const displayPreview = event.toolName === "read" && preview ? formatPathForDisplay(preview, cwd) : preview;
     progress.step = truncateEnd(`tool ${event.toolName}${displayPreview ? ` ${displayPreview}` : ""}`, STEP_MAX_LENGTH);
     return true;
+  }
+  if (event.type === "tool_execution_update" && event.toolName === "VIBECALL") {
+    const details = vibeCallDetailsFromToolResult(event.partialResult);
+    if (details) {
+      progress.step = truncateEnd(`tool ${formatNestedVibeCallTool(details)}`, STEP_MAX_LENGTH);
+      return true;
+    }
+  }
+  if (event.type === "tool_execution_end" && event.toolName === "VIBECALL") {
+    const details = vibeCallDetailsFromToolResult(event.result);
+    if (details) {
+      progress.step = truncateEnd(`tool ${formatNestedVibeCallTool(details)}`, STEP_MAX_LENGTH);
+      return true;
+    }
   }
   if (event.type === "tool_execution_end" && event.isError) {
     progress.status = "fail";
@@ -592,10 +623,23 @@ function appendVibeCallEvent(record: VibeCallRunRecord, type: VibeCallEventType,
   }
 }
 
-function appendTranscriptItem(record: VibeCallRunRecord, role: VibeCallTranscriptItem["role"], text: string): void {
+function appendTranscriptItem(
+  record: VibeCallRunRecord,
+  role: VibeCallTranscriptItem["role"],
+  text: string,
+  toolCallId?: string,
+): void {
   const trimmed = text.trim();
   if (!trimmed) {
     return;
+  }
+  if (toolCallId) {
+    const existing = record.transcript.find((item) => item.role === role && item.toolCallId === toolCallId);
+    if (existing) {
+      existing.text = trimmed;
+      existing.t = Date.now();
+      return;
+    }
   }
   const last = record.transcript.at(-1);
   if (last?.role === role) {
@@ -608,7 +652,7 @@ function appendTranscriptItem(record: VibeCallRunRecord, role: VibeCallTranscrip
       return;
     }
   }
-  record.transcript.push({ t: Date.now(), role, text: trimmed });
+  record.transcript.push({ t: Date.now(), role, text: trimmed, ...(toolCallId ? { toolCallId } : {}) });
   if (record.transcript.length > MAX_RUN_EVENTS) {
     record.transcript.splice(0, record.transcript.length - MAX_RUN_EVENTS);
   }
@@ -686,6 +730,15 @@ function appendTranscriptFromAssistantMessage(record: VibeCallRunRecord, content
   appendTranscriptComplete(record, "assistant", firstTextContent(content));
 }
 
+function appendNestedVibeCallToolTranscript(record: VibeCallRunRecord, result: unknown, toolCallId: string): boolean {
+  const details = vibeCallDetailsFromToolResult(result);
+  if (!details) {
+    return false;
+  }
+  appendTranscriptItem(record, "tool", formatNestedVibeCallTool(details), toolCallId);
+  return true;
+}
+
 function appendProgressEvent(record: VibeCallRunRecord, progress: VibeCallProgress, cwd: string | undefined): void {
   appendVibeCallEvent(
     record,
@@ -694,13 +747,18 @@ function appendProgressEvent(record: VibeCallRunRecord, progress: VibeCallProgre
   );
 }
 
-function appendProgressTranscript(record: VibeCallRunRecord, progress: VibeCallProgress, cwd: string | undefined): void {
+function appendProgressTranscript(
+  record: VibeCallRunRecord,
+  progress: VibeCallProgress,
+  cwd: string | undefined,
+  toolCallId?: string,
+): void {
   const step = progress.step;
   if (step === "think") {
     return;
   }
   if (step.startsWith("tool ")) {
-    appendTranscriptItem(record, "tool", formatProgressStepForDisplay(step, true, cwd).replace(/^tool /, ""));
+    appendTranscriptItem(record, "tool", formatProgressStepForDisplay(step, true, cwd).replace(/^tool /, ""), toolCallId);
     return;
   }
   if (step.startsWith("text ")) {
@@ -711,15 +769,19 @@ function appendProgressTranscript(record: VibeCallRunRecord, progress: VibeCallP
     return;
   }
   if (step.startsWith("fail ")) {
-    appendTranscriptItem(record, "error", step.slice(5));
     return;
   }
   appendTranscriptItem(record, "status", formatProgressStepForDisplay(step, true, cwd));
 }
 
-function appendProgressUpdate(record: VibeCallRunRecord, progress: VibeCallProgress, cwd: string | undefined): void {
+function appendProgressUpdate(
+  record: VibeCallRunRecord,
+  progress: VibeCallProgress,
+  cwd: string | undefined,
+  toolCallId?: string,
+): void {
   appendProgressEvent(record, progress, cwd);
-  appendProgressTranscript(record, progress, cwd);
+  appendProgressTranscript(record, progress, cwd, toolCallId);
 }
 
 function renderVibeCallCall(args: VibeCallParams, theme: Theme, executionStarted: boolean): Text {
@@ -1153,9 +1215,20 @@ export async function runThoughtcodeSubagent(request: VibeSubagentRunRequest): P
 
     if (updateProgressFromChildEvent(request.progress, event, cwd)) {
       if (run) {
-        appendProgressUpdate(run, request.progress, cwd);
+        const toolCallId =
+          event.type === "tool_execution_start" || event.type === "tool_execution_update" || event.type === "tool_execution_end"
+            ? event.toolCallId
+            : undefined;
+        appendProgressUpdate(run, request.progress, cwd, toolCallId);
       }
       emitVibeCallProgress(request, request.progress);
+    }
+
+    if (run && event.type === "tool_execution_update" && event.toolName === "VIBECALL") {
+      appendNestedVibeCallToolTranscript(run, event.partialResult, event.toolCallId);
+    }
+    if (run && event.type === "tool_execution_end" && event.toolName === "VIBECALL") {
+      appendNestedVibeCallToolTranscript(run, event.result, event.toolCallId);
     }
 
     if (event.type !== "message_end") {
@@ -1176,6 +1249,12 @@ export async function runThoughtcodeSubagent(request: VibeSubagentRunRequest): P
       return;
     }
     if (event.message.role !== "toolResult") {
+      return;
+    }
+    if (event.message.toolName === "VIBECALL") {
+      if (run) {
+        appendNestedVibeCallToolTranscript(run, event.message, event.message.toolCallId);
+      }
       return;
     }
     if (event.message.toolName !== "VIBERETURN") {

@@ -1,3 +1,5 @@
+# ThoughtCode program
+
 VIBEMETHOD main()
 	res = VIBECALL mul(a = 3, my number = 9)
 	VIBERETURN(res)

@@ -19,6 +19,43 @@ export interface ThoughtcodeToolDescription {
   promptGuidelines: string[];
 }
 
+export interface ThoughtcodeToolParameter {
+  name: string;
+  type: "string";
+  description: string;
+  required: true;
+}
+
+export const VIBE_CALL_TOOL_PARAMETERS = [
+  {
+    name: "program_file_path",
+    type: "string",
+    description: "Path to the Thoughtcode program file where the VIBEMETHOD is defined.",
+    required: true,
+  },
+  {
+    name: "name",
+    type: "string",
+    description: "Name of the Thoughtcode VIBEMETHOD to call.",
+    required: true,
+  },
+  {
+    name: "args",
+    type: "string",
+    description: "Serialized arguments to pass to the VIBEMETHOD.",
+    required: true,
+  },
+] as const satisfies readonly ThoughtcodeToolParameter[];
+
+export const VIBE_RETURN_TOOL_PARAMETERS = [
+  {
+    name: "value",
+    type: "string",
+    description: "Serialized return value",
+    required: true,
+  },
+] as const satisfies readonly ThoughtcodeToolParameter[];
+
 export const VIBE_CALL_TOOL_DESCRIPTION: ThoughtcodeToolDescription = {
   name: VIBE_CALL_TOOL_NAME,
   label: "VIBECALL",
@@ -50,7 +87,7 @@ export function buildVibeCallSubagentPrompt(args: VibeCallArgs): string {
   return [
     `ENTRYPOINT = ${args.name}`,
     `ENTRYPOINT_ARGS = ${args.args}`,
-    `Read ${args.program_file_path} and literally execute it as if you were an interpreter. Start executing \
-    the program at the VIBEMETHOD, corresponding to the ENTRYPOINT, and use the ENTRYPOINT_ARGS as arguments for it.`,
+    `Read a ThoughtCode program at ${args.program_file_path} and start executing it at the point of VIBEMETHOD, \
+    corresponding to the ENTRYPOINT, and use the ENTRYPOINT_ARGS as arguments for it.`
   ].join("\n");
 }

@@ -9,7 +9,12 @@ import {
 import { fauxAssistantMessage, fauxThinking, fauxToolCall, getApiProvider, registerFauxProvider } from "@earendil-works/pi-ai";
 import { mkdtemp } from "node:fs/promises";
 import { join } from "node:path";
-import { buildVibeCallSubagentPrompt, type VibeCallArgs } from "thoughtcode-core";
+import {
+  VIBE_CALL_TOOL_PARAMETERS,
+  VIBE_RETURN_TOOL_PARAMETERS,
+  buildVibeCallSubagentPrompt,
+  type VibeCallArgs,
+} from "thoughtcode-core";
 import { beforeEach, describe, expect, it } from "vitest";
 import thoughtcodeExtension, {
   clearVibeCallRunsForTests,
@@ -38,6 +43,32 @@ const plainTheme = {
   },
 };
 
+async function renderInspect(runId: string, width = 220): Promise<string> {
+  let rendered = "";
+
+  await inspectThoughtcodeRun(runId, {
+    mode: "tui",
+    ui: {
+      async custom(factory: never) {
+        const component = (factory as (tui: unknown, theme: unknown, keybindings: unknown, done: () => void) => {
+          render(width: number): string[];
+        })(
+          { terminal: { rows: 32 }, requestRender() {} },
+          plainTheme,
+          {},
+          () => {},
+        );
+        rendered = component.render(width).join("\n");
+      },
+      notify() {
+        throw new Error("inspect should not notify for an existing run");
+      },
+    },
+  } as never);
+
+  return rendered;
+}
+
 describe("pi-thoughtcode", () => {
   beforeEach(() => {
     clearVibeCallRunsForTests();
@@ -47,8 +78,14 @@ describe("pi-thoughtcode", () => {
     const tools = createThoughtcodeTools();
 
     expect(tools.map((tool) => tool.name)).toEqual(["VIBECALL", "VIBERETURN"]);
-    expect(vibeCallTool.parameters.required).toEqual(["program_file_path", "name", "args"]);
-    expect(vibeReturnTool.parameters.required).toEqual(["value"]);
+    expect(vibeCallTool.parameters.required).toEqual(VIBE_CALL_TOOL_PARAMETERS.map((parameter) => parameter.name));
+    expect(vibeReturnTool.parameters.required).toEqual(VIBE_RETURN_TOOL_PARAMETERS.map((parameter) => parameter.name));
+    for (const parameter of VIBE_CALL_TOOL_PARAMETERS) {
+      expect(vibeCallTool.parameters.properties[parameter.name]?.description).toBe(parameter.description);
+    }
+    for (const parameter of VIBE_RETURN_TOOL_PARAMETERS) {
+      expect(vibeReturnTool.parameters.properties[parameter.name]?.description).toBe(parameter.description);
+    }
   });
 
   it("registers tools through the PI extension factory", () => {
@@ -295,27 +332,7 @@ describe("pi-thoughtcode", () => {
       undefined,
       { cwd: "/tmp/agentic_coding" } as never,
     );
-    let rendered = "";
-
-    await inspectThoughtcodeRun(callResult.details.runId, {
-      mode: "tui",
-      ui: {
-        async custom(factory: never) {
-          const component = (factory as (tui: unknown, theme: unknown, keybindings: unknown, done: () => void) => {
-            render(width: number): string[];
-          })(
-            { terminal: { rows: 32 }, requestRender() {} },
-            plainTheme,
-            {},
-            () => {},
-          );
-          rendered = component.render(100).join("\n");
-        },
-        notify() {
-          throw new Error("inspect should not notify for an existing run");
-        },
-      },
-    } as never);
+    const rendered = await renderInspect(callResult.details.runId);
 
     expect(rendered).toContain("Thoughtcode tc-1 done");
     expect(rendered).toContain("entry mul");
@@ -328,6 +345,30 @@ describe("pi-thoughtcode", () => {
     expect(rendered).toContain("27");
     expect(rendered).not.toContain("return done 27");
     expect(rendered).not.toContain("thinking thinking");
+  });
+
+  it("renders a missing VIBERETURN failure once in the inspector", async () => {
+    const [vibeCall] = createThoughtcodeTools({
+      async runSubagent(request) {
+        request.progress.status = "fail";
+        request.progress.endedAt = Date.now();
+        request.progress.step = "fail missing VIBERETURN";
+        throw new Error("Finished without calling VIBERETURN.");
+      },
+    });
+    const callResult = await vibeCall.execute(
+      "call-1",
+      { program_file_path: "./program.txt", name: "mul", args: "a=3,my number=9" },
+      undefined,
+      undefined,
+      { cwd: "/tmp/agentic_coding" } as never,
+    );
+    const rendered = await renderInspect(callResult.details.runId);
+
+    expect(callResult.details.status).toBe("error");
+    expect(rendered).toContain("Thoughtcode tc-1 failed");
+    expect(rendered).not.toContain("missing VIBERETURN");
+    expect(rendered.match(/Finished without calling VIBERETURN\./g)?.length).toBe(1);
   });
 
   it("captures child-session reasoning and VIBERETURN in the inspector transcript", async () => {
@@ -393,27 +434,7 @@ describe("pi-thoughtcode", () => {
         } as never,
       );
       const run = getVibeCallRun(result.details.runId);
-      let rendered = "";
-
-      await inspectThoughtcodeRun(result.details.runId, {
-        mode: "tui",
-        ui: {
-          async custom(factory: never) {
-            const component = (factory as (tui: unknown, theme: unknown, keybindings: unknown, done: () => void) => {
-              render(width: number): string[];
-            })(
-              { terminal: { rows: 32 }, requestRender() {} },
-              plainTheme,
-              {},
-              () => {},
-            );
-            rendered = component.render(100).join("\n");
-          },
-          notify() {
-            throw new Error("inspect should not notify for an existing run");
-          },
-        },
-      } as never);
+      const rendered = await renderInspect(result.details.runId, 100);
 
       expect(result.content).toEqual([{ type: "text", text: "27" }]);
       expect(run?.transcript).toEqual(expect.arrayContaining([
@@ -428,6 +449,94 @@ describe("pi-thoughtcode", () => {
       expect(rendered).not.toContain("Thinking...");
       expect(faux.state.callCount).toBe(1);
       expect(faux.getPendingResponseCount()).toBe(0);
+    } finally {
+      faux.unregister();
+    }
+  });
+
+  it("shows nested VIBECALL run ids in the parent inspector transcript", async () => {
+    const faux = registerFauxProvider({
+      api: "thoughtcode-nested-faux-api",
+      provider: "thoughtcode-nested-faux",
+      models: [{ id: "thoughtcode-nested-faux-model" }],
+    });
+    const cwd = await mkdtemp(join(SCRATCH_DIR, "thoughtcode-cwd-"));
+    const authStorage = AuthStorage.inMemory();
+    authStorage.setRuntimeApiKey("thoughtcode-nested-faux", "test-key");
+    const modelRegistry = ModelRegistry.inMemory(authStorage);
+    const streamSimple = getApiProvider(faux.api)?.streamSimple;
+
+    if (!streamSimple) {
+      throw new Error("Faux provider did not register a stream.");
+    }
+
+    modelRegistry.registerProvider("thoughtcode-nested-faux", {
+      api: faux.api,
+      apiKey: "test-key",
+      baseUrl: "http://localhost:0",
+      streamSimple,
+      models: [
+        {
+          id: "thoughtcode-nested-faux-model",
+          name: "Thoughtcode Nested Faux Model",
+          reasoning: false,
+          input: ["text", "image"],
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+          contextWindow: 128000,
+          maxTokens: 16384,
+        },
+      ],
+    });
+    const model = modelRegistry.find("thoughtcode-nested-faux", "thoughtcode-nested-faux-model");
+
+    if (!model) {
+      throw new Error("Registered faux model was not found.");
+    }
+
+    faux.setResponses([
+      fauxAssistantMessage(
+        fauxToolCall("VIBECALL", {
+          program_file_path: "./program.txt",
+          name: "inner",
+          args: "x=1",
+        }),
+        { stopReason: "toolUse" },
+      ),
+      fauxAssistantMessage(fauxToolCall("VIBERETURN", { value: "inner-result" }), {
+        stopReason: "toolUse",
+      }),
+      fauxAssistantMessage(fauxToolCall("VIBERETURN", { value: "outer-result" }), {
+        stopReason: "toolUse",
+      }),
+    ]);
+
+    try {
+      const [vibeCall] = createThoughtcodeTools();
+      const result = await vibeCall.execute(
+        "call-1",
+        {
+          program_file_path: "./program.txt",
+          name: "outer",
+          args: "",
+        },
+        undefined,
+        undefined,
+        {
+          cwd,
+          model,
+          modelRegistry,
+        } as never,
+      );
+      const parentRun = getVibeCallRun(result.details.runId);
+      const rendered = await renderInspect(result.details.runId, 120);
+
+      expect(result.content).toEqual([{ type: "text", text: "outer-result" }]);
+      expect(getVibeCallRun("tc-2")).toBeDefined();
+      expect(parentRun?.transcript).toEqual(expect.arrayContaining([
+        expect.objectContaining({ role: "tool", text: "VIBECALL run=tc-2 inner x=1" }),
+        expect.objectContaining({ role: "return", text: "outer-result" }),
+      ]));
+      expect(rendered).toContain("VIBECALL run=tc-2 inner x=1");
     } finally {
       faux.unregister();
     }
