@@ -6,10 +6,12 @@ import {
   getAgentDir,
 } from "@earendil-works/pi-coding-agent";
 import {
+  THOUGHTCODE_MAX_VIBE_RETURN_REMINDERS,
   THOUGHTCODE_MISSING_VIBE_RETURN_MESSAGE,
   THOUGHTCODE_MISSING_VIBE_RETURN_PROGRESS_STEP,
   THOUGHTCODE_SUBAGENT_ABORTED_BEFORE_PROMPT_MESSAGE,
   THOUGHTCODE_SUBAGENT_FAILED_MESSAGE,
+  THOUGHTCODE_VIBE_RETURN_REMINDER_MESSAGE,
   VIBE_CALL_TOOL_NAME,
   VIBE_RETURN_TOOL_NAME,
   appendThoughtcodeSystemPrompt,
@@ -174,6 +176,25 @@ export async function runThoughtcodeSubagent(request: VibeSubagentRunRequest): P
       expandPromptTemplates: false,
       source: "extension",
     });
+
+    // The subagent sometimes ends its turn without calling VIBERETURN. Remind it with a
+    // follow-up user message and let it try again, bounded so a stubborn agent can't loop forever.
+    for (
+      let reminders = 0;
+      returnedValue === undefined && !subagentError && reminders < THOUGHTCODE_MAX_VIBE_RETURN_REMINDERS;
+      reminders++
+    ) {
+      if (signal?.aborted) {
+        throw new Error(THOUGHTCODE_SUBAGENT_ABORTED_BEFORE_PROMPT_MESSAGE);
+      }
+      if (run) {
+        appendTranscriptItem(run, "status", THOUGHTCODE_VIBE_RETURN_REMINDER_MESSAGE);
+      }
+      await session.prompt(THOUGHTCODE_VIBE_RETURN_REMINDER_MESSAGE, {
+        expandPromptTemplates: false,
+        source: "extension",
+      });
+    }
 
     if (returnedValue === undefined) {
       if (subagentError) {

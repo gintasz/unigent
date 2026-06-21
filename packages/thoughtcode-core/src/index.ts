@@ -95,6 +95,10 @@ export const THOUGHTCODE_SUBAGENT_FAILED_MESSAGE = "ThoughtCode subagent failed.
 export const THOUGHTCODE_SUBAGENT_ABORTED_BEFORE_PROMPT_MESSAGE = "ThoughtCode subagent aborted before prompt start.";
 export const THOUGHTCODE_MISSING_VIBE_RETURN_MESSAGE = "Finished without calling VIBERETURN.";
 export const THOUGHTCODE_MISSING_VIBE_RETURN_PROGRESS_STEP = "failed missing VIBERETURN";
+export const THOUGHTCODE_VIBE_RETURN_REMINDER_MESSAGE =
+  "You ended your turn without calling the VIBERETURN tool. A VIBEMETHOD must report its result by calling " +
+  "VIBERETURN tool as per program instructions. Do not respond in plain text — call the VIBERETURN tool now.";
+export const THOUGHTCODE_MAX_VIBE_RETURN_REMINDERS = 3;
 
 export function buildVibeCallFailureMessage(status: string, message: string): string {
   return `${VIBE_CALL_TOOL_NAME} ${status}: ${message}`;
