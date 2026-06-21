@@ -1,0 +1,3 @@
+ENTRYPOINT = main
+ENTRYPOINT_ARGS =
+Then read ./program1.txt and execute it literally as if you were an interpreter. Start executing the program at the VIBEMETHOD, corresponding to the ENTRYPOINT, and use the ENTRYPOINT_ARGS as arguments for it.

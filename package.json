@@ -1,0 +1,21 @@
+{
+  "name": "thoughtcode",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "tsc -b --clean",
+    "test": "npm run build && vitest run",
+    "typecheck": "tsc -b --pretty false"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-ai": "0.79.9",
+    "@types/node": "24.13.2",
+    "typescript": "5.9.3",
+    "vitest": "4.1.8"
+  }
+}

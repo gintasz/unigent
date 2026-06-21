@@ -1,0 +1,18 @@
+
+
+def VIBECALL(function_name, args ...)
+	prompt = "ENTRYPOINT = ${function}\n"
+	prompt += "ENTRYPOINT_ARGS = ${args}\n"
+	prompt += "Read ./lib.txt file.\n"
+	prompt += "Then read ./program.txt and execute it literally"
+	spawn subagent with this prompt
+	read subagent's response
+
+def VIBERETURN(value)
+    end response immediatelly and output only the value and nothing else, no commentary.
+
+if ENTRYPOINT is empty?
+	ENTRYPOINT = main
+	ENTRYPOINT_ARGS = []
+
+Start executing the program at the VIBEMETHOD, corresponding to the ENTRYPOINT, and use the ENTRYPOINT_ARGS as arguments for it.

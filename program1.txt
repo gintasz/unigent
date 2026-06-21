@@ -1,0 +1,7 @@
+VIBEMETHOD main()
+	res = VIBECALL mul(a = 3, my number = 9)
+	VIBERETURN(res)
+
+VIBEMETHOD mul(a: number, my number: number)
+	n = a * my number
+	VIBERETURN(n)
