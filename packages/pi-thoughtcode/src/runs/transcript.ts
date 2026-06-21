@@ -68,7 +68,7 @@ export function vibeCallDetailsFromToolResult(result: unknown): VibeCallDetails 
 
 export function formatNestedVibeCallTool(details: VibeCallDetails): string {
   const args = details.args.trim() ? ` ${truncateEnd(details.args, 80)}` : "";
-  return `${VIBE_CALL_TOOL_NAME} run=${details.runId} ${details.name}${args}`;
+  return `${VIBE_CALL_TOOL_NAME} id=${details.runId} ${details.name}${args}`;
 }
 
 export function appendNestedVibeCallToolTranscript(record: VibeCallRunRecord, result: unknown, toolCallId: string): boolean {

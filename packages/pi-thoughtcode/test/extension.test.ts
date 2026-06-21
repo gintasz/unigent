@@ -27,9 +27,12 @@ import thoughtcodeExtension, {
   createThoughtcodeTools,
   getVibeCallRun,
   inspectThoughtcodeRun,
+  type VibeCallDetails,
+  type VibeCallRunRecord,
   vibeCallTool,
   vibeReturnTool,
 } from "../dist/index.js";
+import { addNestedVibeCallUsage } from "../dist/runs/index.js";
 
 const SCRATCH_DIR = "/tmp/agentic_coding";
 const vibeCallArgs = (program_file_path: string, name: string, args: string): VibeCallArgs => ({
@@ -281,10 +284,11 @@ describe("pi-thoughtcode", () => {
     );
 
     const output = component?.render(160).join("\n") ?? "";
+    const narrowLines = component?.render(24) ?? [];
 
-    expect(output).toContain(`${VIBE_CALL_TOOL_NAME} running 6s run=tc-7 ↑815 ↓87 R565 $0.00010`);
-    expect(output).toContain("entry main");
-    expect(output).toContain("file program.tc");
+    expect(output).toContain(`${VIBE_CALL_TOOL_NAME} running 6s id=tc-7 ↑815 ↓87 R565 $0.00010`);
+    expect(output).toContain("entry main  file program.tc");
+    expect(narrowLines).toEqual(expect.arrayContaining(["entry main", "file program.tc"]));
     expect(output).toContain('args x=2,y=5, payload={"items":[1,2,3,4,5,6]}');
     expect(output).toContain("tool read program.tc");
     expect(output).not.toContain("d1");
@@ -292,6 +296,124 @@ describe("pi-thoughtcode", () => {
     expect(output).not.toContain("depth=1");
     expect(output).not.toContain("activity");
     expect(output).not.toContain("return:");
+  });
+
+  it("renders cumulative VIBECALL usage explicitly", () => {
+    const component = vibeCallTool.renderResult?.(
+      {
+        content: [{ type: "text", text: "done 24" }],
+        details: {
+          kind: "vibecall",
+          runId: "tc-10",
+          program_file_path: "./program2.txt",
+          name: "fac",
+          args: "n=4",
+          prompt: vibePrompt("./program2.txt", "fac", "n=4"),
+          status: "done",
+          depth: 1,
+          progress: {
+            status: "done",
+            depth: 1,
+            startedAt: 0,
+            endedAt: 20000,
+            step: "done 24",
+            usage: {
+              input: 683,
+              output: 468,
+              cacheRead: 3600,
+              cacheWrite: 0,
+              cost: 0.00072,
+            },
+            usageCumulative: true,
+          },
+          result: "24",
+        },
+      },
+      { expanded: false, isPartial: false },
+      plainTheme as never,
+      { cwd: "/tmp/agentic_coding" } as never,
+    );
+
+    const output = component?.render(160).join("\n") ?? "";
+
+    expect(output).toContain("↑683 ↓468 R3.6k $0.00072 (cumulative)");
+  });
+
+  it("adds nested VIBECALL usage to the parent without double-counting updates", () => {
+    const record: VibeCallRunRecord = {
+      id: "tc-1",
+      toolCallId: "call-1",
+      call: vibeCallArgs("./program2.txt", "fac", "n=4"),
+      prompt: vibePrompt("./program2.txt", "fac", "n=4"),
+      status: "running",
+      depth: 1,
+      progress: {
+        status: "run",
+        depth: 1,
+        startedAt: 0,
+        step: "think",
+        usage: {
+          input: 100,
+          output: 50,
+          cacheRead: 10,
+          cacheWrite: 0,
+          cost: 0.001,
+        },
+      },
+      events: [],
+      transcript: [],
+      nestedUsageByRunId: new Map(),
+      startedAt: 0,
+    };
+
+    const childDetails: VibeCallDetails = {
+      kind: "vibecall",
+      runId: "tc-2",
+      program_file_path: "./program2.txt",
+      name: "fac",
+      args: "n=3",
+      prompt: vibePrompt("./program2.txt", "fac", "n=3"),
+      status: "running",
+      depth: 2,
+      progress: {
+        status: "run",
+        depth: 2,
+        startedAt: 0,
+        step: "think",
+        usage: {
+          input: 20,
+          output: 10,
+          cacheRead: 5,
+          cacheWrite: 1,
+          cost: 0.002,
+        },
+      },
+    };
+
+    expect(addNestedVibeCallUsage(record, childDetails)).toBe(true);
+    expect(addNestedVibeCallUsage(record, childDetails)).toBe(false);
+    expect(addNestedVibeCallUsage(record, {
+      ...childDetails,
+      progress: {
+        ...childDetails.progress,
+        usage: {
+          input: 25,
+          output: 12,
+          cacheRead: 6,
+          cacheWrite: 1,
+          cost: 0.003,
+        },
+      },
+    })).toBe(true);
+
+    expect(record.progress.usage).toEqual({
+      input: 125,
+      output: 62,
+      cacheRead: 16,
+      cacheWrite: 1,
+      cost: 0.004,
+    });
+    expect(record.progress.usageCumulative).toBe(true);
   });
 
   it("renders empty VIBECALL args and thinking state explicitly", () => {
@@ -324,7 +446,7 @@ describe("pi-thoughtcode", () => {
     const output = component?.render(120).join("\n") ?? "";
     const lines = output.split("\n").map((line) => line.trimEnd());
 
-    expect(output).toContain(`${VIBE_CALL_TOOL_NAME} running 6s run=tc-8`);
+    expect(output).toContain(`${VIBE_CALL_TOOL_NAME} running 6s id=tc-8`);
     expect(output).toContain("entry main");
     expect(output).toContain("file ./program1.txt");
     expect(output).toContain("args <empty>");
@@ -369,7 +491,7 @@ describe("pi-thoughtcode", () => {
 
     const output = component?.render(160).join("\n") ?? "";
 
-    expect(output).toContain(`${VIBE_CALL_TOOL_NAME} done 1m12s run=tc-9`);
+    expect(output).toContain(`${VIBE_CALL_TOOL_NAME} done 1m12s id=tc-9`);
     expect(output).toContain("debug");
     expect(output).toContain("depth 1");
     expect(output).toContain("prompt ENTRYPOINT = fac ENTRYPOINT_ARGS = n=4");
@@ -600,10 +722,10 @@ describe("pi-thoughtcode", () => {
       expect(result.content).toEqual([{ type: "text", text: "outer-result" }]);
       expect(getVibeCallRun("tc-2")).toBeDefined();
       expect(parentRun?.transcript).toEqual(expect.arrayContaining([
-        expect.objectContaining({ role: "tool", text: `${VIBE_CALL_TOOL_NAME} run=tc-2 inner x=1` }),
+        expect.objectContaining({ role: "tool", text: `${VIBE_CALL_TOOL_NAME} id=tc-2 inner x=1` }),
         expect.objectContaining({ role: "return", text: "outer-result" }),
       ]));
-      expect(rendered).toContain(`${VIBE_CALL_TOOL_NAME} run=tc-2 inner x=1`);
+      expect(rendered).toContain(`${VIBE_CALL_TOOL_NAME} id=tc-2 inner x=1`);
     } finally {
       faux.unregister();
     }

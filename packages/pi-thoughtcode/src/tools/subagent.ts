@@ -22,11 +22,13 @@ import {
 } from "../runs/child-session-events.js";
 import {
   appendNestedVibeCallToolTranscript,
+  addNestedVibeCallUsage,
   appendProgressUpdate,
   appendTranscriptItem,
   appendVibeCallEvent,
   emitVibeCallProgress,
   getVibeCallRun,
+  vibeCallDetailsFromToolResult,
 } from "../runs/index.js";
 import { STEP_MAX_LENGTH } from "../shared/display.js";
 import { getTextContent } from "../shared/tool-result.js";
@@ -82,6 +84,17 @@ export async function runThoughtcodeSubagent(request: VibeSubagentRunRequest): P
   const unsubscribe = session.subscribe((event) => {
     if (run && event.type === "message_update") {
       appendTranscriptFromAssistantUpdate(run, event);
+    }
+
+    if (
+      run &&
+      (event.type === "tool_execution_update" || event.type === "tool_execution_end") &&
+      event.toolName === VIBE_CALL_TOOL_NAME
+    ) {
+      const details = vibeCallDetailsFromToolResult(event.type === "tool_execution_update" ? event.partialResult : event.result);
+      if (details) {
+        addNestedVibeCallUsage(run, details);
+      }
     }
 
     if (updateProgressFromChildEvent(request.progress, event, cwd)) {

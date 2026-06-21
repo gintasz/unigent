@@ -40,7 +40,7 @@ function formatTokens(value: number): string {
   return `${Math.round(value / 1000)}k`;
 }
 
-export function formatUsage(usage: VibeCallUsage | undefined): string {
+export function formatUsage(usage: VibeCallUsage | undefined, cumulative = false): string {
   if (!usage) {
     return "";
   }
@@ -53,6 +53,9 @@ export function formatUsage(usage: VibeCallUsage | undefined): string {
   }
   if (usage.cost > 0) {
     parts.push(`$${usage.cost.toFixed(5)}`);
+  }
+  if (cumulative) {
+    parts.push("(cumulative)");
   }
   return parts.join(" ");
 }

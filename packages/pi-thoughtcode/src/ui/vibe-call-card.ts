@@ -1,5 +1,5 @@
 import type { AgentToolResult, Theme } from "@earendil-works/pi-coding-agent";
-import { Text } from "@earendil-works/pi-tui";
+import { type Component, Text, visibleWidth } from "@earendil-works/pi-tui";
 import { VIBE_CALL_TOOL_NAME } from "thoughtcode-core";
 import {
   COLLAPSED_ARGS_MAX_LENGTH,
@@ -34,29 +34,51 @@ export function renderVibeCallResult(
   expanded: boolean,
   theme: Theme,
   cwd: string | undefined,
-): Text {
+): Component {
+  return {
+    render(width: number) {
+      return renderVibeCallResultLines(result, expanded, theme, cwd, width);
+    },
+    invalidate() {
+      // No cached render state.
+    },
+  };
+}
+
+function renderVibeCallResultLines(
+  result: AgentToolResult<VibeCallDetails>,
+  expanded: boolean,
+  theme: Theme,
+  cwd: string | undefined,
+  width: number,
+): string[] {
   const details = result.details;
   const progress = details.progress;
   const status = labelForStatus(progress, details.status);
   const duration = progress ? formatDuration(progress.startedAt, progress.endedAt) : "";
-  const usage = formatUsage(progress?.usage);
+  const usage = formatUsage(progress?.usage, progress?.usageCumulative);
   const headerParts = [
     markerForProgress(progress, details.status, theme),
     theme.fg("toolTitle", theme.bold(VIBE_CALL_TOOL_NAME)),
     theme.fg(status === "done" ? "success" : status === "failed" ? "error" : "accent", status),
     duration,
-    `run=${details.runId}`,
+    `id=${details.runId}`,
     usage,
   ].filter(Boolean);
 
   const argsMax = expanded ? EXPANDED_ARGS_MAX_LENGTH : COLLAPSED_ARGS_MAX_LENGTH;
   const valueMax = expanded ? EXPANDED_VALUE_MAX_LENGTH : COLLAPSED_VALUE_MAX_LENGTH;
-  const lines = [
-    headerParts.join(" "),
-    `${theme.fg("muted", "entry")} ${details.name}`,
-    `${theme.fg("muted", "file")} ${formatPathForDisplay(details.program_file_path, cwd)}`,
-    `${theme.fg("muted", "args")} ${formatArgsForDisplay(details.args, argsMax)}`,
-  ];
+  const entryLine = `${theme.fg("muted", "entry")} ${details.name}`;
+  const fileLine = `${theme.fg("muted", "file")} ${formatPathForDisplay(details.program_file_path, cwd)}`;
+  const entryFileLine = `${entryLine}  ${fileLine}`;
+  const lines = [headerParts.join(" ")];
+
+  if (visibleWidth(entryFileLine) <= width) {
+    lines.push(entryFileLine);
+  } else {
+    lines.push(entryLine, fileLine);
+  }
+  lines.push(`${theme.fg("muted", "args")} ${formatArgsForDisplay(details.args, argsMax)}`);
 
   if (details.status === "done" && details.result !== undefined) {
     lines.push(`${theme.fg("muted", "done")} ${truncateEnd(details.result, valueMax)}`);
@@ -76,5 +98,5 @@ export function renderVibeCallResult(
     }
   }
 
-  return new Text(lines.join("\n"), 0, 0);
+  return lines;
 }

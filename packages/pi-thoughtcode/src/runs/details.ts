@@ -86,6 +86,7 @@ export function createVibeCallRunRecord(
     progress,
     events: [],
     transcript: [],
+    nestedUsageByRunId: new Map(),
     cwd,
     startedAt: progress.startedAt,
   };

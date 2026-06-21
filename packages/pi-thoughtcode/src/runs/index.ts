@@ -8,3 +8,4 @@ export {
   formatNestedVibeCallTool,
   vibeCallDetailsFromToolResult,
 } from "./transcript.js";
+export { addNestedVibeCallUsage } from "./usage.js";

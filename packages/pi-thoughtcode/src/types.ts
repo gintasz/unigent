@@ -31,6 +31,7 @@ export interface VibeCallProgress {
   endedAt?: number;
   step: string;
   usage?: VibeCallUsage;
+  usageCumulative?: boolean;
 }
 
 export interface VibeCallDetails {
@@ -84,6 +85,7 @@ export interface VibeCallRunRecord {
   progress: VibeCallProgress;
   events: VibeCallEvent[];
   transcript: VibeCallTranscriptItem[];
+  nestedUsageByRunId: Map<string, VibeCallUsage>;
   result?: string;
   error?: string;
   cwd?: string;
