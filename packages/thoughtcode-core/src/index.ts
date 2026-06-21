@@ -89,7 +89,7 @@ export const THOUGHTCODE_SYSTEM_PROMPT = [
   "<!-- thoughtcode:end -->",
 ].join("\n");
 
-export const THOUGHTCODE_SYSTEM_PROMPT_MARKER = "<!-- thoughtcode:begin -->";
+const THOUGHTCODE_SYSTEM_PROMPT_MARKER = "<!-- thoughtcode:begin -->";
 
 export const THOUGHTCODE_SUBAGENT_FAILED_MESSAGE = "ThoughtCode subagent failed.";
 export const THOUGHTCODE_SUBAGENT_ABORTED_BEFORE_PROMPT_MESSAGE = "ThoughtCode subagent aborted before prompt start.";
@@ -102,6 +102,13 @@ export function buildVibeCallFailureMessage(status: string, message: string): st
 
 export function buildCannotSpawnThoughtcodeSubagentMessage(reason: string): string {
   return `Cannot spawn ThoughtCode subagent: ${reason}`;
+}
+
+export function appendThoughtcodeSystemPrompt(systemPrompt: string): string {
+  if (systemPrompt.includes(THOUGHTCODE_SYSTEM_PROMPT_MARKER)) {
+    return systemPrompt;
+  }
+  return systemPrompt.trimEnd() ? `${systemPrompt.trimEnd()}\n\n${THOUGHTCODE_SYSTEM_PROMPT}` : THOUGHTCODE_SYSTEM_PROMPT;
 }
 
 export function buildVibeCallSubagentPrompt(args: VibeCallArgs): string {
