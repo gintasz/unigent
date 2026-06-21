@@ -685,7 +685,7 @@ export async function runThoughtcodeSubagent(request: VibeSubagentRunRequest): P
       request.progress.endedAt = Date.now();
       request.progress.step = "fail missing VIBERETURN";
       emitVibeCallProgress(request, request.progress, "error");
-      throw new Error("Thoughtcode subagent finished without calling VIBERETURN.");
+      throw new Error("Finished without calling VIBERETURN.");
     }
 
     request.progress.status = "done";
