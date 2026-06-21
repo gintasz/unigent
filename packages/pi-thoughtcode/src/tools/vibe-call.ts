@@ -5,7 +5,16 @@ import {
   buildVibeCallSubagentPrompt,
   type VibeCallArgs,
 } from "thoughtcode-core";
-import { appendProgressUpdate, createVibeCallDetails, createVibeCallProgress, createVibeCallRunId, createVibeCallRunRecord, setVibeCallRun } from "../runs/index.js";
+import {
+  appendProgressUpdate,
+  createVibeCallDetails,
+  createVibeCallProgress,
+  createVibeCallRunId,
+  createVibeCallRunRecord,
+  logRunEnd,
+  logRunStart,
+  setVibeCallRun,
+} from "../runs/index.js";
 import { STEP_MAX_LENGTH } from "../shared/display.js";
 import { getErrorMessage, textResult } from "../shared/tool-result.js";
 import { truncateEnd } from "../shared/truncate.js";
@@ -17,6 +26,8 @@ import { runThoughtcodeSubagent } from "./subagent.js";
 export function createVibeCallTool(options: ThoughtcodeToolOptions = {}) {
   const runSubagent = options.runSubagent ?? runThoughtcodeSubagent;
   const depth = options.depth ?? 1;
+  const parentTraceId = options.traceId;
+  const parentRunId = options.parentRunId;
 
   return defineTool({
     ...VIBE_CALL_TOOL_DESCRIPTION,
@@ -37,8 +48,10 @@ export function createVibeCallTool(options: ThoughtcodeToolOptions = {}) {
       const prompt = buildVibeCallSubagentPrompt(call);
       const progress = createVibeCallProgress(depth);
       const runId = createVibeCallRunId();
-      const run = createVibeCallRunRecord(runId, toolCallId, call, prompt, depth, progress, ctx?.cwd);
+      const traceId = parentTraceId ?? runId;
+      const run = createVibeCallRunRecord(runId, toolCallId, call, prompt, depth, progress, ctx?.cwd, traceId, parentRunId);
       setVibeCallRun(run);
+      logRunStart(run);
       appendProgressUpdate(run, progress, ctx?.cwd);
 
       try {
@@ -52,6 +65,8 @@ export function createVibeCallTool(options: ThoughtcodeToolOptions = {}) {
           depth,
           progress,
           onUpdate,
+          traceId,
+          parentRunId,
         });
 
         progress.status = "done";
@@ -61,6 +76,7 @@ export function createVibeCallTool(options: ThoughtcodeToolOptions = {}) {
         run.endedAt = progress.endedAt;
         run.result = value;
         appendProgressUpdate(run, progress, ctx?.cwd);
+        logRunEnd(run, "done", value);
 
         return textResult(value, createVibeCallDetails(runId, call, prompt, "done", depth, progress, run.events, run.transcript, { result: value }));
       } catch (error) {
@@ -73,6 +89,7 @@ export function createVibeCallTool(options: ThoughtcodeToolOptions = {}) {
         run.endedAt = progress.endedAt;
         run.error = message;
         appendProgressUpdate(run, progress, ctx?.cwd);
+        logRunEnd(run, status, message);
         return textResult(
           buildVibeCallFailureMessage(status, message),
           createVibeCallDetails(runId, call, prompt, status, depth, progress, run.events, run.transcript, { error: message }),

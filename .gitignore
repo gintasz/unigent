@@ -7,3 +7,6 @@ coverage/
 .pi/
 .claude/
 .opencode/
+
+# Thoughtcode debug logs
+.thoughtcode/

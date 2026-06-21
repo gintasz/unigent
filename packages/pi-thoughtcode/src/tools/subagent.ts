@@ -30,6 +30,8 @@ import {
   appendVibeCallEvent,
   emitVibeCallProgress,
   getVibeCallRun,
+  logReminder,
+  logSessionEvent,
   vibeCallDetailsFromToolResult,
 } from "../runs/index.js";
 import { STEP_MAX_LENGTH } from "../shared/display.js";
@@ -51,6 +53,8 @@ export async function runThoughtcodeSubagent(request: VibeSubagentRunRequest): P
   let subagentError: string | undefined;
   const childTools = createThoughtcodeTools({
     depth: request.depth + 1,
+    traceId: request.traceId,
+    parentRunId: request.runId,
     onVibeReturn: (value) => {
       returnedValue = value;
     },
@@ -84,6 +88,8 @@ export async function runThoughtcodeSubagent(request: VibeSubagentRunRequest): P
   });
 
   const unsubscribe = session.subscribe((event) => {
+    logSessionEvent(request, event);
+
     if (run && event.type === "message_update") {
       appendTranscriptFromAssistantUpdate(run, event);
     }
@@ -189,6 +195,7 @@ export async function runThoughtcodeSubagent(request: VibeSubagentRunRequest): P
       }
       if (run) {
         appendTranscriptItem(run, "status", THOUGHTCODE_VIBE_RETURN_REMINDER_MESSAGE);
+        logReminder(run, THOUGHTCODE_VIBE_RETURN_REMINDER_MESSAGE);
       }
       await session.prompt(THOUGHTCODE_VIBE_RETURN_REMINDER_MESSAGE, {
         expandPromptTemplates: false,

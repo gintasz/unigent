@@ -1,3 +1,5 @@
+export { logReminder, logRunEnd, logRunStart, logSessionEvent } from "./debug-log.js";
+export { formatDebugLog } from "./format-debug-log.js";
 export { createVibeCallDetails, createVibeCallProgress, createVibeCallRunRecord, emitVibeCallProgress } from "./details.js";
 export { appendProgressEvent, appendProgressTranscript, appendProgressUpdate, classifyProgressStep } from "./progress.js";
 export { clearVibeCallRunsForTests, createVibeCallRunId, getVibeCallRun, listVibeCallRuns, setVibeCallRun } from "./store.js";

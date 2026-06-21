@@ -75,10 +75,14 @@ export function createVibeCallRunRecord(
   depth: number,
   progress: VibeCallProgress,
   cwd: string | undefined,
+  traceId: string = runId,
+  parentRunId?: string,
 ): VibeCallRunRecord {
   return {
     id: runId,
     toolCallId,
+    traceId,
+    parentRunId,
     call,
     prompt,
     status: "running",

@@ -65,6 +65,10 @@ export interface VibeSubagentRunRequest {
   depth: number;
   progress: VibeCallProgress;
   onUpdate: ((result: AgentToolResult<VibeCallDetails>) => void) | undefined;
+  /** Root run id shared by an entire nested VIBECALL tree; used to correlate debug logs. */
+  traceId: string;
+  /** Run id of the VIBECALL that spawned this subagent, if any. */
+  parentRunId?: string;
 }
 
 export type VibeSubagentRunner = (request: VibeSubagentRunRequest) => Promise<string>;
@@ -73,11 +77,17 @@ export interface ThoughtcodeToolOptions {
   runSubagent?: VibeSubagentRunner;
   onVibeReturn?: (value: string) => void;
   depth?: number;
+  /** Root run id shared by an entire nested VIBECALL tree; used to correlate debug logs. */
+  traceId?: string;
+  /** Run id of the VIBECALL that owns the session these tools run in, if any. */
+  parentRunId?: string;
 }
 
 export interface VibeCallRunRecord {
   id: string;
   toolCallId: string;
+  traceId: string;
+  parentRunId?: string;
   call: VibeCallArgs;
   prompt: string;
   status: VibeCallDetails["status"];
