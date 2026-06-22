@@ -2,11 +2,11 @@ import { defineTool, type AgentToolResult } from "@earendil-works/pi-coding-agen
 import {
   THOUGHTCODE_MAX_VIBE_RETURN_TYPE_FAILURES,
   VIBE_RETURN_TOOL_DESCRIPTION,
+  checkReturnValue,
   type VibeReturnArgs,
 } from "thoughtcode-core";
 import { textResult } from "../shared/tool-result.js";
 import type { ThoughtcodeToolOptions, VibeReturnDetails } from "../types.js";
-import { checkReturnValue } from "./return-type.js";
 import { vibeReturnParameters, type VibeReturnParams } from "./schema.js";
 
 export function createVibeReturnTool(options: ThoughtcodeToolOptions = {}) {

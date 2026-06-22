@@ -1,10 +1,6 @@
-import { mkdtemp, writeFile } from "node:fs/promises";
-import { join } from "node:path";
-import { listVibeFunctionNames, parseDecoratorsForFunction } from "thoughtcode-core";
+import { listVibeFunctionNames, parseDecoratorsForFunction, parseProgram } from "thoughtcode-core";
 import { describe, expect, it } from "vitest";
-import { buildVibeRunConfig, resolveDecorators, validateProgramSyntax } from "../dist/index.js";
-
-const SCRATCH_DIR = "/tmp/agentic_coding";
+import { buildVibeRunConfig, validateProgramSyntax } from "../dist/index.js";
 
 const PROGRAM = [
   '@model("claude-opus-4-8")',
@@ -98,30 +94,34 @@ describe("buildVibeRunConfig", () => {
   });
 });
 
-describe("resolveDecorators (file → parse → validate)", () => {
-  async function writeProgram(contents: string): Promise<string> {
-    const dir = await mkdtemp(join(SCRATCH_DIR, "thoughtcode-dec-"));
-    const file = join(dir, "program.txt");
-    await writeFile(file, contents);
-    return file;
-  }
+describe("parseProgram body extraction", () => {
+  it("captures each function's body, excluding the next function's decorators", () => {
+    const program = parseProgram(PROGRAM);
+    expect(program.functions.get("fac")?.body).toBe("VIBERETURN(1)");
+    expect(program.functions.get("main")?.body).toBe("VIBERETURN(1)");
+  });
 
-  it("resolves a valid run config from the file", async () => {
-    const file = await writeProgram(PROGRAM);
-    expect(await resolveDecorators(file, "fac", undefined)).toEqual({
-      status: "ok",
+  it("captures multi-line bodies", () => {
+    const prog = ["VIBEFUNCTION f(n: number)", "    step one", "    step two", ""].join("\n");
+    expect(parseProgram(prog).functions.get("f")?.body).toBe("step one\n    step two");
+  });
+});
+
+describe("decorators via the Program model", () => {
+  it("builds a run config from a function's decorators", () => {
+    const fn = parseProgram(PROGRAM).functions.get("fac");
+    if (!fn) throw new Error("missing fac");
+    expect(buildVibeRunConfig(fn.decorators)).toEqual({
       config: { modelId: "claude-opus-4-8", timeoutMs: 30000 },
+      errors: [],
     });
   });
 
-  it("reports invalid decorators", async () => {
-    const file = await writeProgram(['@timeout("nope")', "VIBEFUNCTION f()", "    VIBERETURN(1)"].join("\n"));
-    const result = await resolveDecorators(file, "f", undefined);
-    expect(result.status).toBe("invalid");
-  });
-
-  it("reports unreadable files", async () => {
-    expect(await resolveDecorators("/no/such/file.txt", "f", undefined)).toEqual({ status: "unreadable" });
+  it("reports invalid decorator args", () => {
+    const prog = ['@timeout("nope")', "VIBEFUNCTION f()", "    VIBERETURN(1)"].join("\n");
+    const fn = parseProgram(prog).functions.get("f");
+    if (!fn) throw new Error("missing f");
+    expect(buildVibeRunConfig(fn.decorators).errors.length).toBeGreaterThan(0);
   });
 });
 

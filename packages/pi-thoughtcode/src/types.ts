@@ -1,5 +1,5 @@
 import type { AgentToolResult, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import type { VibeCallArgs } from "thoughtcode-core";
+import type { VibeCallArgs, VibeRunConfig } from "thoughtcode-core";
 
 export interface VibeCallUsage {
   input: number;
@@ -81,6 +81,10 @@ export interface VibeSubagentRunRequest {
   traceId: string;
   /** Run id of the VIBECALL that spawned this subagent, if any. */
   parentRunId?: string;
+  /** Declared return type of the callee (parsed by the caller), enforced on its VIBERETURN. */
+  returnType?: string;
+  /** Run configuration from the callee's decorators (parsed by the caller). */
+  runConfig?: VibeRunConfig;
 }
 
 export type VibeSubagentRunner = (request: VibeSubagentRunRequest) => Promise<string>;

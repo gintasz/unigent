@@ -18,7 +18,6 @@ import {
   VIBE_THROW_TOOL_NAME,
   appendThoughtcodeSystemPrompt,
   buildCannotSpawnThoughtcodeSubagentMessage,
-  buildVibeFunctionNotFoundMessage,
 } from "thoughtcode-core";
 import {
   appendTranscriptFromAssistantMessage,
@@ -37,14 +36,117 @@ import {
   logSessionEvent,
   vibeCallDetailsFromToolResult,
 } from "../runs/index.js";
-import { resolveDecorators } from "./decorators.js";
-import { resolveReturnType } from "./return-type.js";
-import { VibeThrowError } from "./vibe-throw.js";
+import { VibeThrowError } from "../tools/vibe-throw.js";
 import { STEP_MAX_LENGTH } from "../shared/display.js";
 import { getTextContent } from "../shared/tool-result.js";
 import { truncateEnd } from "../shared/truncate.js";
-import type { VibeReturnDetails, VibeSubagentRunRequest } from "../types.js";
-import { createThoughtcodeTools } from "./index.js";
+import type { VibeCallRunRecord, VibeReturnDetails, VibeSubagentRunRequest } from "../types.js";
+import { createThoughtcodeTools } from "../tools/index.js";
+
+type RunOutcome =
+  | { kind: "done"; value: string }
+  | { kind: "throw"; message: string }
+  | { kind: "error"; message: string; step?: string };
+
+interface RunLimiter {
+  signal: AbortSignal;
+  throwIfAborted(): void;
+  checkBudget(costSoFar: number, budgetUsd: number | undefined): void;
+  dispose(): void;
+}
+
+/**
+ * Owns @timeout / @budget / parent-cancel aborting for one subagent run. A deliberate limit breach
+ * sets a reason so it surfaces as a VibeThrowError rather than a plain cancel.
+ */
+function createRunLimiter(opts: {
+  parentSignal: AbortSignal | undefined;
+  timeoutMs: number | undefined;
+  functionName: string;
+  onAbort: () => void;
+}): RunLimiter {
+  const controller = new AbortController();
+  let abortReason: string | undefined;
+  const onParentAbort = () => controller.abort();
+  if (opts.parentSignal) {
+    if (opts.parentSignal.aborted) controller.abort();
+    else opts.parentSignal.addEventListener("abort", onParentAbort, { once: true });
+  }
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  if (opts.timeoutMs !== undefined) {
+    timer = setTimeout(() => {
+      abortReason ??= `exceeded its ${opts.timeoutMs! / 1000}s timeout`;
+      controller.abort();
+    }, opts.timeoutMs);
+    timer.unref?.();
+  }
+  const onAbort = () => opts.onAbort();
+  if (controller.signal.aborted) {
+    opts.onAbort();
+  } else {
+    controller.signal.addEventListener("abort", onAbort, { once: true });
+  }
+
+  return {
+    signal: controller.signal,
+    throwIfAborted() {
+      if (!controller.signal.aborted) return;
+      if (abortReason) throw new VibeThrowError(`VIBEFUNCTION \`${opts.functionName}\` ${abortReason}.`);
+      throw new Error(THOUGHTCODE_SUBAGENT_ABORTED_BEFORE_PROMPT_MESSAGE);
+    },
+    checkBudget(costSoFar, budgetUsd) {
+      if (budgetUsd === undefined || controller.signal.aborted || costSoFar <= budgetUsd) return;
+      abortReason ??= `exceeded its $${budgetUsd} cost budget`;
+      controller.abort();
+    },
+    dispose() {
+      if (timer) clearTimeout(timer);
+      opts.parentSignal?.removeEventListener("abort", onParentAbort);
+      controller.signal.removeEventListener("abort", onAbort);
+    },
+  };
+}
+
+/** Single place that records a run's final progress/status and emits it (replaces 4 near-identical blocks). */
+function concludeRun(
+  request: VibeSubagentRunRequest,
+  run: VibeCallRunRecord | undefined,
+  cwd: string | undefined,
+  outcome: RunOutcome,
+): void {
+  const progress = request.progress;
+  progress.endedAt = Date.now();
+  if (outcome.kind === "done") {
+    progress.status = "done";
+    progress.step = `done ${truncateEnd(outcome.value, STEP_MAX_LENGTH - 5)}`;
+  } else {
+    progress.status = "fail";
+    progress.step =
+      outcome.kind === "throw"
+        ? `throw ${truncateEnd(outcome.message, STEP_MAX_LENGTH - 6)}`
+        : (outcome.step ?? `fail ${truncateEnd(outcome.message, STEP_MAX_LENGTH - 5)}`);
+  }
+  if (run) {
+    run.status = outcome.kind === "done" ? "done" : "error";
+    run.endedAt = progress.endedAt;
+    if (outcome.kind === "done") {
+      run.result = outcome.value;
+    } else {
+      run.error = outcome.message;
+      // Record the full message as its own transcript item — progress.step is truncated for the
+      // compact one-line status, but the expanded/inspect view must show the whole thing.
+      if (outcome.kind === "throw") {
+        appendTranscriptItem(run, "error", outcome.message);
+      }
+    }
+    appendProgressUpdate(run, progress, cwd);
+  }
+  if (outcome.kind === "done") {
+    emitVibeCallProgress(request, progress);
+  } else {
+    emitVibeCallProgress(request, progress, "error");
+  }
+}
 
 export async function runThoughtcodeSubagent(request: VibeSubagentRunRequest): Promise<string> {
   const { ctx, signal } = request;
@@ -58,30 +160,11 @@ export async function runThoughtcodeSubagent(request: VibeSubagentRunRequest): P
   let returnedValue: string | undefined;
   let thrownMessage: string | undefined;
   let subagentError: string | undefined;
-  const resolvedReturnType = await resolveReturnType(request.call.program_file_path, request.call.name, ctx.cwd);
-  if (resolvedReturnType.status === "not-found") {
-    // Calling a function that the program does not declare is a program bug; fail loudly instead of
-    // spawning a subagent that would flail looking for code that isn't there.
-    throw new Error(buildVibeFunctionNotFoundMessage(request.call.name, request.call.program_file_path));
-  }
-  if (resolvedReturnType.status === "invalid") {
-    // A declared-but-unrecognized return type is a program bug; fail the VIBECALL loudly rather than
-    // silently running without type checking.
-    throw new Error(
-      `VIBEFUNCTION \`${request.call.name}\` declares an unrecognized return type \`${resolvedReturnType.annotation}\`. ` +
-        `Use a valid ArkType expression — e.g. number, number.integer, string, boolean, "number > 0", or '"ok" | "fail"'.`,
-    );
-  }
-  const returnType = resolvedReturnType.status === "ok" ? resolvedReturnType.type : undefined;
 
-  const resolvedDecorators = await resolveDecorators(request.call.program_file_path, request.call.name, ctx.cwd);
-  if (resolvedDecorators.status === "invalid") {
-    // Bad decorators are a program bug; fail the VIBECALL loudly.
-    throw new Error(
-      `VIBEFUNCTION \`${request.call.name}\` has invalid decorators: ${resolvedDecorators.errors.join("; ")}`,
-    );
-  }
-  const runConfig = resolvedDecorators.status === "ok" ? resolvedDecorators.config : {};
+  // The caller (vibe-call) parsed the program once and resolved these from the model; the subagent
+  // just runs the session with them.
+  const returnType = request.returnType;
+  const runConfig = request.runConfig ?? {};
 
   if (runConfig.modelId) {
     const requested = ctx.modelRegistry
@@ -136,31 +219,12 @@ export async function runThoughtcodeSubagent(request: VibeSubagentRunRequest): P
     ...(runConfig.thinkingLevel ? { thinkingLevel: runConfig.thinkingLevel } : {}),
   });
 
-  // @timeout / @budget abort this run; parent signal aborts too. abortReason distinguishes a deliberate
-  // limit breach (surfaced as a VibeThrowError) from a plain parent cancel.
-  const runController = new AbortController();
-  let abortReason: string | undefined;
-  const onParentAbort = () => runController.abort();
-  if (signal) {
-    if (signal.aborted) runController.abort();
-    else signal.addEventListener("abort", onParentAbort, { once: true });
-  }
-  let timeoutTimer: ReturnType<typeof setTimeout> | undefined;
-  if (runConfig.timeoutMs !== undefined) {
-    timeoutTimer = setTimeout(() => {
-      abortReason ??= `exceeded its ${runConfig.timeoutMs! / 1000}s timeout`;
-      runController.abort();
-    }, runConfig.timeoutMs);
-    timeoutTimer.unref?.();
-  }
-  const effectiveSignal = runController.signal;
-  const throwIfAborted = () => {
-    if (!effectiveSignal.aborted) return;
-    if (abortReason) {
-      throw new VibeThrowError(`VIBEFUNCTION \`${request.call.name}\` ${abortReason}.`);
-    }
-    throw new Error(THOUGHTCODE_SUBAGENT_ABORTED_BEFORE_PROMPT_MESSAGE);
-  };
+  const limiter = createRunLimiter({
+    parentSignal: signal,
+    timeoutMs: runConfig.timeoutMs,
+    functionName: request.call.name,
+    onAbort: () => void session.abort(),
+  });
 
   const unsubscribe = session.subscribe((event) => {
     logSessionEvent(request, event);
@@ -191,14 +255,7 @@ export async function runThoughtcodeSubagent(request: VibeSubagentRunRequest): P
       emitVibeCallProgress(request, request.progress);
     }
 
-    if (
-      runConfig.budgetUsd !== undefined &&
-      !runController.signal.aborted &&
-      (request.progress.usage?.cost ?? 0) > runConfig.budgetUsd
-    ) {
-      abortReason ??= `exceeded its $${runConfig.budgetUsd} cost budget`;
-      runController.abort();
-    }
+    limiter.checkBudget(request.progress.usage?.cost ?? 0, runConfig.budgetUsd);
 
     if (run && event.type === "tool_execution_update" && event.toolName === VIBE_CALL_TOOL_NAME) {
       appendNestedVibeCallToolTranscript(run, event.partialResult, event.toolCallId);
@@ -240,28 +297,19 @@ export async function runThoughtcodeSubagent(request: VibeSubagentRunRequest): P
     returnedValue = typeof details?.value === "string" ? details.value : getTextContent(event.message.content);
   });
 
-  const abortHandler = () => {
-    void session.abort();
-  };
-  if (effectiveSignal.aborted) {
-    void session.abort();
-  } else {
-    effectiveSignal.addEventListener("abort", abortHandler, { once: true });
-  }
-
   try {
-    throwIfAborted();
+    limiter.throwIfAborted();
 
     await session.bindExtensions({});
 
-    throwIfAborted();
+    limiter.throwIfAborted();
 
     emitVibeCallProgress(request, request.progress);
     await session.prompt(appendThoughtcodeSystemPrompt(request.prompt), {
       expandPromptTemplates: false,
       source: "extension",
     });
-    throwIfAborted();
+    limiter.throwIfAborted();
 
     // The subagent sometimes ends its turn without calling VIBERETURN. Remind it with a
     // follow-up user message and let it try again, bounded so a stubborn agent can't loop forever.
@@ -273,7 +321,7 @@ export async function runThoughtcodeSubagent(request: VibeSubagentRunRequest): P
       reminders < THOUGHTCODE_MAX_VIBE_RETURN_REMINDERS;
       reminders++
     ) {
-      throwIfAborted();
+      limiter.throwIfAborted();
       if (run) {
         appendTranscriptItem(run, "status", THOUGHTCODE_VIBE_RETURN_REMINDER_MESSAGE);
         logReminder(run, THOUGHTCODE_VIBE_RETURN_REMINDER_MESSAGE);
@@ -282,75 +330,34 @@ export async function runThoughtcodeSubagent(request: VibeSubagentRunRequest): P
         expandPromptTemplates: false,
         source: "extension",
       });
-      throwIfAborted();
+      limiter.throwIfAborted();
     }
 
     if (thrownMessage !== undefined) {
       // The VIBEFUNCTION deliberately aborted via VIBETHROW. Surface it as a VibeThrowError so the
       // VIBECALL boundary reports an intentional program throw, not an infrastructure failure.
-      request.progress.status = "fail";
-      request.progress.endedAt = Date.now();
-      request.progress.step = `throw ${truncateEnd(thrownMessage, STEP_MAX_LENGTH - 6)}`;
-      if (run) {
-        run.status = "error";
-        run.endedAt = request.progress.endedAt;
-        run.error = thrownMessage;
-        // Record the full message as its own transcript item — progress.step is truncated for the
-        // compact one-line status, but the expanded/inspect view must show the whole thing.
-        appendTranscriptItem(run, "error", thrownMessage);
-        appendProgressUpdate(run, request.progress, cwd);
-      }
-      emitVibeCallProgress(request, request.progress, "error");
+      concludeRun(request, run, cwd, { kind: "throw", message: thrownMessage });
       throw new VibeThrowError(thrownMessage);
     }
 
     if (returnedValue === undefined) {
       if (subagentError) {
-        request.progress.status = "fail";
-        request.progress.endedAt = Date.now();
-        request.progress.step = `fail ${truncateEnd(subagentError, STEP_MAX_LENGTH - 5)}`;
-        if (run) {
-          run.status = "error";
-          run.endedAt = request.progress.endedAt;
-          run.error = subagentError;
-          appendProgressUpdate(run, request.progress, cwd);
-        }
-        emitVibeCallProgress(request, request.progress, "error");
+        concludeRun(request, run, cwd, { kind: "error", message: subagentError });
         throw new Error(subagentError);
       }
-      request.progress.status = "fail";
-      request.progress.endedAt = Date.now();
-      request.progress.step = THOUGHTCODE_MISSING_VIBE_RETURN_PROGRESS_STEP;
-      if (run) {
-        run.status = "error";
-        run.endedAt = request.progress.endedAt;
-        run.error = THOUGHTCODE_MISSING_VIBE_RETURN_MESSAGE;
-        appendProgressUpdate(run, request.progress, cwd);
-      }
-      emitVibeCallProgress(request, request.progress, "error");
+      concludeRun(request, run, cwd, {
+        kind: "error",
+        message: THOUGHTCODE_MISSING_VIBE_RETURN_MESSAGE,
+        step: THOUGHTCODE_MISSING_VIBE_RETURN_PROGRESS_STEP,
+      });
       throw new Error(THOUGHTCODE_MISSING_VIBE_RETURN_MESSAGE);
     }
 
-    request.progress.status = "done";
-    request.progress.endedAt = Date.now();
-    request.progress.step = `done ${truncateEnd(returnedValue, STEP_MAX_LENGTH - 5)}`;
-    if (run) {
-      run.status = "done";
-      run.endedAt = request.progress.endedAt;
-      run.result = returnedValue;
-      appendProgressUpdate(run, request.progress, cwd);
-    }
-    emitVibeCallProgress(request, request.progress);
+    concludeRun(request, run, cwd, { kind: "done", value: returnedValue });
     return returnedValue;
   } finally {
-    if (timeoutTimer) {
-      clearTimeout(timeoutTimer);
-    }
+    limiter.dispose();
     unsubscribe();
-    if (signal) {
-      signal.removeEventListener("abort", onParentAbort);
-    }
-    effectiveSignal.removeEventListener("abort", abortHandler);
     session.dispose();
   }
 }

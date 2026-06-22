@@ -1,20 +1,17 @@
-import { readFile } from "node:fs/promises";
-import { isAbsolute, resolve } from "node:path";
 import {
   buildVibeFunctionNotFoundMessage,
-  hasVibeFunction,
+  collectVibeFunctionErrors,
   parseVibeCallArgs,
-  parseVibeFunctionParams,
   serializeVibeCallArgs,
   type ParsedParam,
 } from "thoughtcode-core";
-import { bindAndCheckArgs } from "./params.js";
-import { isParsableReturnType } from "./return-type.js";
+import { bindAndCheckArgs } from "../runtime/params.js";
+import { loadProgram } from "../runtime/program.js";
 
 export type PreparedEntrypoint = { ok: true; args: string } | { ok: false; error: string };
 
 /**
- * Resolve a /thoughtcode-run invocation: read the program, confirm the entrypoint exists, parse the
+ * Resolve a /thoughtcode-run invocation: load the program, confirm the entrypoint exists, parse the
  * user-supplied args (bare single value / `name=value` pairs / JSON object), bind + type-check them,
  * and return the normalized `name=value` arg string for the subagent prompt. Validated up front so the
  * user gets an immediate error instead of a failed agent run.
@@ -25,34 +22,24 @@ export async function prepareEntrypoint(
   rawArgs: string,
   cwd: string | undefined,
 ): Promise<PreparedEntrypoint> {
-  let text: string;
-  try {
-    const absolute = isAbsolute(programFilePath) ? programFilePath : resolve(cwd ?? process.cwd(), programFilePath);
-    text = await readFile(absolute, "utf8");
-  } catch {
+  const loaded = await loadProgram(programFilePath, cwd);
+  if (!loaded.ok) {
     return { ok: false, error: `Cannot read program ${programFilePath}` };
   }
-
-  if (!hasVibeFunction(text, functionName)) {
+  const fn = loaded.program.functions.get(functionName);
+  if (!fn) {
     return { ok: false, error: buildVibeFunctionNotFoundMessage(functionName, programFilePath) };
   }
-
-  const parsed = parseVibeFunctionParams(text, functionName);
-  const declErrors = [...parsed.errors];
-  for (const param of parsed.params) {
-    if (param.type && !isParsableReturnType(param.type)) {
-      declErrors.push(`parameter \`${param.name}\` has an unrecognized type \`${param.type}\``);
-    }
-  }
+  const declErrors = collectVibeFunctionErrors(fn);
   if (declErrors.length > 0) {
-    return { ok: false, error: `VIBEFUNCTION \`${functionName}\` has invalid parameters: ${declErrors.join("; ")}` };
+    return { ok: false, error: `VIBEFUNCTION \`${functionName}\`: ${declErrors.join("; ")}` };
   }
 
-  const values = parseEntrypointArgs(rawArgs.trim(), functionName, parsed.params);
+  const values = parseEntrypointArgs(rawArgs.trim(), functionName, fn.params);
   if ("error" in values) {
     return { ok: false, error: values.error };
   }
-  const binding = bindAndCheckArgs(parsed.params, values.values);
+  const binding = bindAndCheckArgs(fn.params, values.values);
   if (!binding.ok) {
     return { ok: false, error: binding.error };
   }

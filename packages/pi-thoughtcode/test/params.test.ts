@@ -1,8 +1,8 @@
 import { mkdtemp, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { parseVibeCallArgs, parseVibeFunctionParams, serializeVibeCallArgs } from "thoughtcode-core";
+import { parseProgram, parseVibeCallArgs, parseVibeFunctionParams, serializeVibeCallArgs } from "thoughtcode-core";
 import { describe, expect, it } from "vitest";
-import { bindAndCheckArgs, createThoughtcodeTools, prepareEntrypoint, resolveParams } from "../dist/index.js";
+import { bindAndCheckArgs, collectVibeFunctionErrors, createThoughtcodeTools, prepareEntrypoint } from "../dist/index.js";
 
 const SCRATCH_DIR = "/tmp/agentic_coding";
 
@@ -61,26 +61,17 @@ describe("parseVibeCallArgs / serializeVibeCallArgs", () => {
   });
 });
 
-describe("resolveParams (file → parse → validate types)", () => {
-  it("resolves valid params", async () => {
-    const cwd = await writeProgram(["VIBEFUNCTION f(a: number, b: string = \"x\")", "    VIBERETURN(a)"].join("\n"));
-    expect(await resolveParams("./program.txt", "f", cwd)).toEqual({
-      status: "ok",
-      params: [
-        { name: "a", type: "number", hasDefault: false },
-        { name: "b", type: "string", default: "x", hasDefault: true },
-      ],
-    });
+describe("collectVibeFunctionErrors (param declarations)", () => {
+  it("accepts valid param types", () => {
+    const fn = parseProgram('VIBEFUNCTION f(a: number, b: string = "x")\n    VIBERETURN(a)').functions.get("f");
+    if (!fn) throw new Error("missing f");
+    expect(collectVibeFunctionErrors(fn)).toEqual([]);
   });
 
-  it("reports an unrecognized param type as invalid", async () => {
-    const cwd = await writeProgram("VIBEFUNCTION f(a: intfaketype)\n    VIBERETURN(a)");
-    const result = await resolveParams("./program.txt", "f", cwd);
-    expect(result.status).toBe("invalid");
-  });
-
-  it("reports unreadable files", async () => {
-    expect(await resolveParams("/no/such.txt", "f", undefined)).toEqual({ status: "unreadable" });
+  it("flags an unrecognized param type", () => {
+    const fn = parseProgram("VIBEFUNCTION f(a: intfaketype)\n    VIBERETURN(a)").functions.get("f");
+    if (!fn) throw new Error("missing f");
+    expect(collectVibeFunctionErrors(fn).some((error) => error.includes("intfaketype"))).toBe(true);
   });
 });
 

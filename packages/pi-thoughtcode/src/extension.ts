@@ -13,8 +13,8 @@ import {
   logTopLevelEvent,
   logTopLevelStart,
 } from "./runs/index.js";
-import { createThoughtcodeTools, prepareEntrypoint } from "./tools/index.js";
-import { inspectThoughtcodeRun } from "./ui/index.js";
+import { inspectThoughtcodeRun, prepareEntrypoint } from "./commands/index.js";
+import { createThoughtcodeTools } from "./tools/index.js";
 
 const thoughtcodeExtension: ExtensionFactory = (pi: ExtensionAPI) => {
   // One trace id for this process ties the top-level pi agent together with every VIBECALL subagent

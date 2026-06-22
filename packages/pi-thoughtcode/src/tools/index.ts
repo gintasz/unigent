@@ -4,36 +4,12 @@ import { createVibeLoadProgramTool } from "./vibe-load-program.js";
 import { createVibeReturnTool } from "./vibe-return.js";
 import { createVibeThrowTool } from "./vibe-throw.js";
 
-export {
-  buildVibeRunConfig,
-  resolveDecorators,
-  DECORATOR_REGISTRY,
-  type ResolvedDecorators,
-  type VibeRunConfig,
-} from "./decorators.js";
-export { prepareEntrypoint, type PreparedEntrypoint } from "./entrypoint.js";
-export {
-  bindAndCheckArgs,
-  resolveParams,
-  type ArgBinding,
-  type ResolvedParams,
-} from "./params.js";
-export {
-  checkReturnValue,
-  isParsableReturnType,
-  resolveReturnType,
-  validateProgramSyntax,
-  validateValue,
-  type ProgramSyntaxCheck,
-  type ResolvedReturnType,
-  type ReturnTypeCheck,
-} from "./return-type.js";
-export { runThoughtcodeSubagent } from "./subagent.js";
 export { createVibeCallTool, vibeCallTool } from "./vibe-call.js";
 export { createVibeLoadProgramTool, vibeLoadProgramTool } from "./vibe-load-program.js";
 export { createVibeReturnTool, vibeReturnTool } from "./vibe-return.js";
 export { createVibeThrowTool, vibeThrowTool, VibeThrowError } from "./vibe-throw.js";
 
+/** The four LLM-callable VIBE tools, bound to the given options. */
 export function createThoughtcodeTools(options: ThoughtcodeToolOptions = {}) {
   return [
     createVibeCallTool(options),

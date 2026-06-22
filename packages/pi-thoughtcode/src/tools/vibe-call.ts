@@ -4,9 +4,13 @@ import {
   buildVibeCallFailureMessage,
   buildVibeCallSubagentPrompt,
   buildVibeCallThrewMessage,
+  buildVibeFunctionNotFoundMessage,
+  buildVibeRunConfig,
+  collectVibeFunctionErrors,
   parseVibeCallArgs,
   serializeVibeCallArgs,
   type VibeCallArgs,
+  type VibeRunConfig,
 } from "thoughtcode-core";
 import {
   appendProgressUpdate,
@@ -23,9 +27,10 @@ import { getErrorMessage, textResult } from "../shared/tool-result.js";
 import { truncateEnd } from "../shared/truncate.js";
 import type { ThoughtcodeToolOptions, VibeCallDetails } from "../types.js";
 import { renderVibeCallCall, renderVibeCallResult } from "../ui/index.js";
-import { bindAndCheckArgs, resolveParams } from "./params.js";
+import { bindAndCheckArgs } from "../runtime/params.js";
+import { loadProgram } from "../runtime/program.js";
+import { runThoughtcodeSubagent } from "../runtime/subagent.js";
 import { vibeCallParameters, type VibeCallParams } from "./schema.js";
-import { runThoughtcodeSubagent } from "./subagent.js";
 import { VibeThrowError } from "./vibe-throw.js";
 
 export function createVibeCallTool(options: ThoughtcodeToolOptions = {}) {
@@ -59,19 +64,30 @@ export function createVibeCallTool(options: ThoughtcodeToolOptions = {}) {
           createVibeCallDetails(runId, rawCall, "", "error", depth, undefined, undefined, undefined, { error: message }),
         );
 
-      // Input-side type checking: resolve the callee's declared params, bind the caller's args, apply
-      // defaults, and type-check. A bad arg is the caller's fault → return an error result it can retry.
+      // Parse the program ONCE, then resolve everything the callee needs from the model: declared
+      // return type, decorator run-config, and the bound/type-checked arguments. A bad arg is the
+      // caller's fault → return an error result it can retry. When the file can't be read we proceed
+      // with raw args; the subagent's VIBELOADPROGRAM surfaces the read error.
       let resolvedArgs = rawCall.args;
-      const resolvedParams = await resolveParams(rawCall.program_file_path, rawCall.name, ctx?.cwd);
-      if (resolvedParams.status === "invalid") {
-        return argError(`VIBEFUNCTION \`${rawCall.name}\` has invalid parameters: ${resolvedParams.errors.join("; ")}`);
-      }
-      if (resolvedParams.status === "ok") {
+      let returnType: string | undefined;
+      let runConfig: VibeRunConfig = {};
+      const loaded = await loadProgram(rawCall.program_file_path, ctx?.cwd);
+      if (loaded.ok) {
+        const fn = loaded.program.functions.get(rawCall.name);
+        if (!fn) {
+          return argError(buildVibeFunctionNotFoundMessage(rawCall.name, rawCall.program_file_path));
+        }
+        const declErrors = collectVibeFunctionErrors(fn);
+        if (declErrors.length > 0) {
+          return argError(`VIBEFUNCTION \`${rawCall.name}\`: ${declErrors.join("; ")}`);
+        }
+        returnType = fn.returnType;
+        runConfig = buildVibeRunConfig(fn.decorators).config;
         const parsedArgs = parseVibeCallArgs(rawCall.args);
         if (parsedArgs.errors.length > 0) {
           return argError(`${rawCall.name}: ${parsedArgs.errors.join("; ")}`);
         }
-        const binding = bindAndCheckArgs(resolvedParams.params, parsedArgs.values);
+        const binding = bindAndCheckArgs(fn.params, parsedArgs.values);
         if (!binding.ok) {
           return argError(`${rawCall.name}: ${binding.error}`);
         }
@@ -99,6 +115,8 @@ export function createVibeCallTool(options: ThoughtcodeToolOptions = {}) {
           onUpdate,
           traceId,
           parentRunId,
+          returnType,
+          runConfig,
         });
 
         progress.status = "done";

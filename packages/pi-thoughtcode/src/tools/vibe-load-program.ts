@@ -5,10 +5,10 @@ import {
   VIBE_LOAD_PROGRAM_TOOL_DESCRIPTION,
   buildVibeLoadProgramUnreadableMessage,
   buildVibeProgramSyntaxErrorMessage,
+  validateProgramSyntax,
 } from "thoughtcode-core";
 import { textResult } from "../shared/tool-result.js";
 import type { ThoughtcodeToolOptions, VibeLoadProgramDetails } from "../types.js";
-import { validateProgramSyntax } from "./return-type.js";
 import { vibeLoadProgramParameters, type VibeLoadProgramParams } from "./schema.js";
 
 export function createVibeLoadProgramTool(_options: ThoughtcodeToolOptions = {}) {

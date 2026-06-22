@@ -2,7 +2,14 @@ import { mkdtemp, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { extractReturnType } from "thoughtcode-core";
 import { describe, expect, it } from "vitest";
-import { checkReturnValue, createVibeReturnTool, isParsableReturnType, resolveReturnType, validateProgramSyntax } from "../dist/index.js";
+import {
+  checkReturnValue,
+  collectVibeFunctionErrors,
+  createVibeReturnTool,
+  isParsableReturnType,
+  loadProgram,
+  validateProgramSyntax,
+} from "../dist/index.js";
 
 const SCRATCH_DIR = "/tmp/agentic_coding";
 
@@ -26,40 +33,35 @@ const TYPED_PROGRAM = [
   "    VIBERETURN(x)",
 ].join("\n");
 
-describe("resolveReturnType (file → extract → validate wiring)", () => {
-  it("resolves a valid annotation from the program file", async () => {
+describe("loadProgram + Program model", () => {
+  it("parses each function's return type (or undefined when untyped)", async () => {
     const { file } = await writeProgram(TYPED_PROGRAM);
-    expect(await resolveReturnType(file, "fac", undefined)).toEqual({ status: "ok", type: "number.integer" });
-  });
-
-  it("reports an unrecognized annotation as invalid (the intfaketype bug)", async () => {
-    const { file } = await writeProgram(TYPED_PROGRAM);
-    expect(await resolveReturnType(file, "bogus", undefined)).toEqual({ status: "invalid", annotation: "intfaketype" });
-  });
-
-  it("reports none when the function has no annotation", async () => {
-    const { file } = await writeProgram(TYPED_PROGRAM);
-    expect(await resolveReturnType(file, "main", undefined)).toEqual({ status: "none" });
+    const loaded = await loadProgram(file, undefined);
+    if (!loaded.ok) throw new Error("expected program to load");
+    expect(loaded.program.functions.get("fac")?.returnType).toBe("number.integer");
+    expect(loaded.program.functions.get("main")?.returnType).toBeUndefined();
+    expect(loaded.program.functions.has("nope")).toBe(false);
   });
 
   it("resolves a relative path against cwd", async () => {
     const { dir } = await writeProgram(TYPED_PROGRAM);
-    expect(await resolveReturnType("program.txt", "fac", dir)).toEqual({ status: "ok", type: "number.integer" });
+    const loaded = await loadProgram("program.txt", dir);
+    expect(loaded.ok && loaded.program.functions.get("fac")?.returnType).toBe("number.integer");
   });
 
   it("reports unreadable when the file is missing", async () => {
-    expect(await resolveReturnType("/no/such/program.txt", "fac", undefined)).toEqual({ status: "unreadable" });
+    expect(await loadProgram("/no/such/program.txt", undefined)).toEqual({ ok: false });
   });
 
-  it("reports not-found when the function is not declared", async () => {
+  it("flags an unrecognized return type via collectVibeFunctionErrors", async () => {
     const { file } = await writeProgram(TYPED_PROGRAM);
-    expect(await resolveReturnType(file, "nope", undefined)).toEqual({ status: "not-found" });
-  });
-
-  it("distinguishes a declared-but-untyped function from an absent one", async () => {
-    const { file } = await writeProgram(TYPED_PROGRAM);
-    expect(await resolveReturnType(file, "main", undefined)).toEqual({ status: "none" });
-    expect(await resolveReturnType(file, "main2", undefined)).toEqual({ status: "not-found" });
+    const loaded = await loadProgram(file, undefined);
+    if (!loaded.ok) throw new Error("expected program to load");
+    const bogus = loaded.program.functions.get("bogus");
+    const fac = loaded.program.functions.get("fac");
+    if (!bogus || !fac) throw new Error("missing functions");
+    expect(collectVibeFunctionErrors(bogus).some((error) => error.includes("intfaketype"))).toBe(true);
+    expect(collectVibeFunctionErrors(fac)).toEqual([]);
   });
 });
 
