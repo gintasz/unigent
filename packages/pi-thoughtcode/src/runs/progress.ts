@@ -5,7 +5,7 @@ import type { VibeCallEventType, VibeCallProgress, VibeCallRunRecord } from "../
 import { appendTranscriptItem, appendVibeCallEvent } from "./transcript.js";
 
 export function classifyProgressStep(step: string): VibeCallEventType {
-  if (step === "think") {
+  if (step === "think" || step.startsWith("think ")) {
     return "thinking";
   }
   if (step.startsWith("tool ")) {
@@ -38,14 +38,13 @@ export function appendProgressTranscript(
   toolCallId?: string,
 ): void {
   const step = progress.step;
-  if (step === "think") {
+  // Thinking/responding text is accumulated into the transcript separately (from assistant updates),
+  // so the progress step — a compact trailing window — must not add a duplicate transcript item.
+  if (step === "think" || step.startsWith("think ") || step.startsWith("text ")) {
     return;
   }
   if (step.startsWith("tool ")) {
     appendTranscriptItem(record, "tool", formatProgressStepForDisplay(step, true, cwd).replace(/^tool /, ""), toolCallId);
-    return;
-  }
-  if (step.startsWith("text ")) {
     return;
   }
   if (step.startsWith("done ")) {

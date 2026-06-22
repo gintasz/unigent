@@ -1,7 +1,7 @@
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import { isAbsolute, relative } from "node:path";
 import type { VibeCallDetails, VibeCallProgress, VibeCallUsage } from "../types.js";
-import { truncateEnd, truncateMiddle } from "./truncate.js";
+import { truncateEnd, truncateMiddle, truncateStart } from "./truncate.js";
 
 export const COLLAPSED_ARGS_MAX_LENGTH = 140;
 export const EXPANDED_ARGS_MAX_LENGTH = 1000;
@@ -87,9 +87,16 @@ export function formatProgressStepForDisplay(step: string, expanded: boolean, cw
   if (step === "think") {
     return "thinking";
   }
+  const limit = expanded ? EXPANDED_VALUE_MAX_LENGTH : STEP_MAX_LENGTH;
+  // Streaming text/thinking: keep the label and the TRAILING window of the content (the newest text),
+  // so the compact card shows where generation is now instead of a stale head or a lone delta.
   const textPrefix = "text ";
   if (step.startsWith(textPrefix)) {
-    return truncateEnd(`responding ${step.slice(textPrefix.length)}`, expanded ? EXPANDED_VALUE_MAX_LENGTH : STEP_MAX_LENGTH);
+    return `responding ${truncateStart(step.slice(textPrefix.length), Math.max(0, limit - "responding ".length))}`;
+  }
+  const thinkPrefix = "think ";
+  if (step.startsWith(thinkPrefix)) {
+    return `thinking ${truncateStart(step.slice(thinkPrefix.length), Math.max(0, limit - "thinking ".length))}`;
   }
   const readPrefix = "tool read ";
   const formatted =

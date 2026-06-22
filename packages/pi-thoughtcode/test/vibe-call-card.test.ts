@@ -53,3 +53,49 @@ describe("renderVibeCallResult width safety", () => {
     for (const line of lines) expect(visibleWidth(line)).toBeLessThanOrEqual(40);
   });
 });
+
+describe("streaming step shows a trailing window", () => {
+  const baseDetails = {
+    kind: "vibecall",
+    runId: "tc-1",
+    program_file_path: "./program2.txt",
+    name: "fac",
+    args: "n = 2",
+    prompt: "ENTRYPOINT = fac",
+    depth: 1,
+  };
+
+  function runningCard(step: string, width: number): string[] {
+    return renderCard(
+      { ...baseDetails, status: "running", progress: { status: "run", depth: 1, startedAt: Date.now(), step } },
+      false,
+      width,
+    );
+  }
+
+  it("shows the tail of a streaming response, not the head", () => {
+    const head = "HEAD_SHOULD_DROP";
+    const tail = "TAIL_NEWEST_TEXT";
+    const long = `${head} ${"x".repeat(300)} ${tail}`;
+    const responding = runningCard(`text ${long}`, 300).find((line) => line.includes("responding"));
+    expect(responding).toBeDefined();
+    expect(responding).toContain(tail);
+    expect(responding).not.toContain(head);
+    expect(responding?.startsWith("responding ...")).toBe(true);
+  });
+
+  it("shows the tail of streaming thinking, not the head", () => {
+    const head = "THINK_HEAD_DROP";
+    const tail = "THINK_TAIL_NEW";
+    const long = `${head} ${"y".repeat(300)} ${tail}`;
+    const thinking = runningCard(`think ${long}`, 300).find((line) => line.includes("thinking"));
+    expect(thinking).toBeDefined();
+    expect(thinking).toContain(tail);
+    expect(thinking).not.toContain(head);
+  });
+
+  it("shows short streaming text in full without an ellipsis", () => {
+    const responding = runningCard("text hello world", 200).find((line) => line.includes("responding"));
+    expect(responding).toBe("responding hello world");
+  });
+});

@@ -7,7 +7,7 @@ import {
   formatPathForDisplay,
 } from "../shared/display.js";
 import { getTextContent } from "../shared/tool-result.js";
-import { truncateEnd } from "../shared/truncate.js";
+import { truncateEnd, truncateStart } from "../shared/truncate.js";
 import type { VibeCallProgress, VibeCallRunRecord } from "../types.js";
 import {
   appendTranscriptItem,
@@ -220,14 +220,18 @@ export function updateProgressFromChildEvent(progress: VibeCallProgress, event: 
     return true;
   }
   if (event.type === "message_update") {
-    const assistantEvent = event.assistantMessageEvent as { type?: string };
+    const assistantEvent = event.assistantMessageEvent as { type?: string; partial?: { content?: unknown } };
+    const partialContent = assistantEvent.partial?.content;
+    // Show a trailing window of the ACCUMULATED stream (from `partial`), not the latest tiny delta —
+    // a lone "`" delta is useless. truncateStart keeps the tail; display re-trims per compact/expanded.
     if (assistantEvent.type?.startsWith("thinking")) {
-      progress.step = "think";
+      const thinking = thinkingTextContent(partialContent).replace(/\s+/g, " ").trim();
+      progress.step = thinking ? `think ${truncateStart(thinking, EXPANDED_VALUE_MAX_LENGTH)}` : "think";
       return true;
     }
-    const text = textFromAssistantEvent(event).replace(/\s+/g, " ").trim();
+    const text = (firstTextContent(partialContent) || textFromAssistantEvent(event)).replace(/\s+/g, " ").trim();
     if (text) {
-      progress.step = `text ${truncateEnd(JSON.stringify(text), STEP_MAX_LENGTH - 5)}`;
+      progress.step = `text ${truncateStart(text, EXPANDED_VALUE_MAX_LENGTH)}`;
       return true;
     }
   }
@@ -240,7 +244,7 @@ export function updateProgressFromChildEvent(progress: VibeCallProgress, event: 
     }
     const text = firstTextContent(event.message.content).replace(/\s+/g, " ").trim();
     if (text) {
-      progress.step = `text ${truncateEnd(JSON.stringify(text), STEP_MAX_LENGTH - 5)}`;
+      progress.step = `text ${truncateStart(text, EXPANDED_VALUE_MAX_LENGTH)}`;
       return true;
     }
   }
