@@ -19,5 +19,8 @@
   "scripts": {
     "build": "tsc -b",
     "clean": "tsc -b --clean"
+  },
+  "dependencies": {
+    "arktype": "^2.2.0"
   }
 }

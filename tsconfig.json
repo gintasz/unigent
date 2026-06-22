@@ -6,6 +6,9 @@
     },
     {
       "path": "./packages/pi-thoughtcode"
+    },
+    {
+      "path": "./packages/thoughtcode-cli"
     }
   ]
 }

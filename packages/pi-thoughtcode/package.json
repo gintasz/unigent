@@ -34,7 +34,6 @@
     "test:all": "vitest run"
   },
   "dependencies": {
-    "arktype": "^2.2.0",
     "thoughtcode-core": "0.0.0",
     "typebox": "1.1.38"
   },

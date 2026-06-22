@@ -1,0 +1,19 @@
+{
+  "name": "thoughtcode-cli",
+  "version": "0.0.0",
+  "type": "module",
+  "bin": {
+    "thoughtcode": "./dist/cli.js"
+  },
+  "files": [
+    "dist/**/*.js",
+    "dist/**/*.d.ts"
+  ],
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "tsc -b --clean"
+  },
+  "dependencies": {
+    "thoughtcode-core": "0.0.0"
+  }
+}
