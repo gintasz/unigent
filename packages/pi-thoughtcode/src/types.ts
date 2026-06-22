@@ -55,6 +55,11 @@ export interface VibeReturnDetails {
   value: string;
 }
 
+export interface VibeLoadProgramDetails {
+  kind: "vibeloadprogram";
+  program_file_path: string;
+}
+
 export interface VibeSubagentRunRequest {
   runId: string;
   toolCallId: string;

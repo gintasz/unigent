@@ -25,11 +25,11 @@ if (!live) {
 
 const RECURSIVE = [
   "# recursive factorial",
-  "VIBEFUNCTION main() -> int",
+  "VIBEFUNCTION main() -> number.integer",
   "    res = VIBECALL fac(n = 2)",
   "    VIBERETURN(res)",
   "",
-  "VIBEFUNCTION fac(n: number) -> int",
+  "VIBEFUNCTION fac(n: number) -> number.integer",
   "    if n <= 1",
   "        VIBERETURN(1)",
   "    else",
@@ -51,12 +51,12 @@ const BOGUS_TYPE = [
 ].join("\n");
 
 const WRONG_RETURN = [
-  "# returns a string where int is declared",
+  "# returns a string where number.integer is declared",
   "VIBEFUNCTION main()",
   "    res = VIBECALL fac(n = 2)",
   "    VIBERETURN(res)",
   "",
-  "VIBEFUNCTION fac(n: number) -> int",
+  "VIBEFUNCTION fac(n: number) -> number.integer",
   "    VIBERETURN(hello)",
   "",
 ].join("\n");
@@ -111,9 +111,15 @@ describeLive("thoughtcode e2e: unrecognized return type fails loudly", () => {
     h = await runProgram("bogus.txt", BOGUS_TYPE, "main");
   }, LLM_TIMEOUT);
 
-  it("surfaces a VIBECALL error naming the unrecognized type", (ctx) => {
+  it("surfaces an error naming the unrecognized type", (ctx) => {
     skipOnTransportError(ctx, h);
-    const failed = h.toolResults.filter((r) => r.toolName === "VIBECALL" && /unrecognized return type/i.test(r.text));
+    // The bad type is caught either at load (VIBELOADPROGRAM validates the whole program) or at the
+    // VIBECALL boundary (resolveReturnType) — accept whichever surface the model reaches first.
+    const failed = h.toolResults.filter(
+      (r) =>
+        (r.toolName === "VIBELOADPROGRAM" || r.toolName === "VIBECALL") &&
+        /(unrecognized return type|syntax error)/i.test(r.text),
+    );
     expect(failed.length).toBeGreaterThan(0);
     expect(failed.some((r) => r.text.includes("intfaketype"))).toBe(true);
   });

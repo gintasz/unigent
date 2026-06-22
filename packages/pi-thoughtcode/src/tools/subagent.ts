@@ -13,6 +13,7 @@ import {
   THOUGHTCODE_SUBAGENT_FAILED_MESSAGE,
   THOUGHTCODE_VIBE_RETURN_REMINDER_MESSAGE,
   VIBE_CALL_TOOL_NAME,
+  VIBE_LOAD_PROGRAM_TOOL_NAME,
   VIBE_RETURN_TOOL_NAME,
   appendThoughtcodeSystemPrompt,
   buildCannotSpawnThoughtcodeSubagentMessage,
@@ -64,7 +65,7 @@ export async function runThoughtcodeSubagent(request: VibeSubagentRunRequest): P
     // silently running without type checking.
     throw new Error(
       `VIBEFUNCTION \`${request.call.name}\` declares an unrecognized return type \`${resolvedReturnType.annotation}\`. ` +
-        `Use a valid type — e.g. int, str, bool, number, number.integer, or an ArkType expression like "number > 0" or '"ok" | "fail"'.`,
+        `Use a valid ArkType expression — e.g. number, number.integer, string, boolean, "number > 0", or '"ok" | "fail"'.`,
     );
   }
   const returnType = resolvedReturnType.status === "ok" ? resolvedReturnType.type : undefined;
@@ -102,7 +103,7 @@ export async function runThoughtcodeSubagent(request: VibeSubagentRunRequest): P
     sessionManager: SessionManager.inMemory(cwd),
     resourceLoader,
     customTools: [...childTools],
-    tools: ["read", VIBE_CALL_TOOL_NAME, VIBE_RETURN_TOOL_NAME],
+    tools: ["read", VIBE_CALL_TOOL_NAME, VIBE_RETURN_TOOL_NAME, VIBE_LOAD_PROGRAM_TOOL_NAME],
   });
 
   const unsubscribe = session.subscribe((event) => {

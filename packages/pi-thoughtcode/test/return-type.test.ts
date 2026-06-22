@@ -2,7 +2,7 @@ import { mkdtemp, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { extractReturnType } from "thoughtcode-core";
 import { describe, expect, it } from "vitest";
-import { checkReturnValue, createVibeReturnTool, isParsableReturnType, normalizeReturnType, resolveReturnType } from "../dist/index.js";
+import { checkReturnValue, createVibeReturnTool, isParsableReturnType, resolveReturnType, validateProgramSyntax } from "../dist/index.js";
 
 const SCRATCH_DIR = "/tmp/agentic_coding";
 
@@ -19,7 +19,7 @@ const TYPED_PROGRAM = [
   "    res = VIBECALL fac(n = 2)",
   "    VIBERETURN(res)",
   "",
-  "VIBEFUNCTION fac(n: number) -> int",
+  "VIBEFUNCTION fac(n: number) -> number.integer",
   "    VIBERETURN(hello)",
   "",
   "VIBEFUNCTION bogus() -> intfaketype",
@@ -29,7 +29,7 @@ const TYPED_PROGRAM = [
 describe("resolveReturnType (file → extract → validate wiring)", () => {
   it("resolves a valid annotation from the program file", async () => {
     const { file } = await writeProgram(TYPED_PROGRAM);
-    expect(await resolveReturnType(file, "fac", undefined)).toEqual({ status: "ok", type: "int" });
+    expect(await resolveReturnType(file, "fac", undefined)).toEqual({ status: "ok", type: "number.integer" });
   });
 
   it("reports an unrecognized annotation as invalid (the intfaketype bug)", async () => {
@@ -44,7 +44,7 @@ describe("resolveReturnType (file → extract → validate wiring)", () => {
 
   it("resolves a relative path against cwd", async () => {
     const { dir } = await writeProgram(TYPED_PROGRAM);
-    expect(await resolveReturnType("program.txt", "fac", dir)).toEqual({ status: "ok", type: "int" });
+    expect(await resolveReturnType("program.txt", "fac", dir)).toEqual({ status: "ok", type: "number.integer" });
   });
 
   it("reports unreadable when the file is missing", async () => {
@@ -63,29 +63,50 @@ describe("resolveReturnType (file → extract → validate wiring)", () => {
   });
 });
 
-describe("return-type synonyms", () => {
-  it("maps friendly aliases to ArkType keywords", () => {
-    expect(normalizeReturnType("int")).toBe("number.integer");
-    expect(normalizeReturnType("str")).toBe("string");
-    expect(normalizeReturnType("bool")).toBe("boolean");
-    expect(normalizeReturnType("int[]")).toBe("number.integer[]");
-    expect(normalizeReturnType('{ "r": "int" }')).toBe('{ "r": "number.integer" }');
-  });
-
-  it("does not clobber already-valid dotted keywords", () => {
-    expect(normalizeReturnType("number.integer")).toBe("number.integer");
-  });
-
-  it("enforces the synonym at check time (the `int` bug)", () => {
-    expect(checkReturnValue("hello", "int").ok).toBe(false);
-    expect(checkReturnValue("2", "int")).toEqual({ ok: true });
-    expect(checkReturnValue("2.5", "int").ok).toBe(false);
-  });
-
-  it("reports parsability for warning surfacing", () => {
-    expect(isParsableReturnType("int")).toBe(true);
+describe("return types rely purely on ArkType (no synonyms)", () => {
+  it("accepts native ArkType keywords", () => {
     expect(isParsableReturnType("number.integer")).toBe(true);
+    expect(isParsableReturnType("string")).toBe(true);
+    expect(isParsableReturnType("boolean")).toBe(true);
+  });
+
+  it("rejects friendly aliases that are no longer mapped", () => {
+    expect(isParsableReturnType("int")).toBe(false);
+    expect(isParsableReturnType("str")).toBe(false);
+    expect(isParsableReturnType("bool")).toBe(false);
     expect(isParsableReturnType("@@@ not a type")).toBe(false);
+  });
+
+  it("does not coerce aliases at check time", () => {
+    // `int` is not an ArkType keyword, so it is treated as no constraint, not as number.integer.
+    expect(checkReturnValue("2.5", "int")).toEqual({ ok: true });
+    expect(checkReturnValue("2.5", "number.integer").ok).toBe(false);
+  });
+});
+
+describe("validateProgramSyntax", () => {
+  it("passes a program whose declared return types are all valid", () => {
+    const program = [
+      "VIBEFUNCTION main()",
+      "VIBEFUNCTION fac(n: number) -> number.integer",
+      'VIBEFUNCTION shape(x) -> { "result": "number" }',
+    ].join("\n");
+    expect(validateProgramSyntax(program)).toEqual({ ok: true });
+  });
+
+  it("flags each unrecognized return type", () => {
+    const program = ["VIBEFUNCTION a() -> intfaketype", "VIBEFUNCTION b() -> number", "VIBEFUNCTION c() -> bool"].join("\n");
+    const result = validateProgramSyntax(program);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.errors).toHaveLength(2);
+      expect(result.errors[0]).toContain("`a`");
+      expect(result.errors[1]).toContain("`c`");
+    }
+  });
+
+  it("allows functions with no return type", () => {
+    expect(validateProgramSyntax("VIBEFUNCTION main()\nVIBEFUNCTION helper(x)")).toEqual({ ok: true });
   });
 });
 

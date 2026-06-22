@@ -1,5 +1,6 @@
 export const VIBE_CALL_TOOL_NAME = "VIBECALL";
 export const VIBE_RETURN_TOOL_NAME = "VIBERETURN";
+export const VIBE_LOAD_PROGRAM_TOOL_NAME = "VIBELOADPROGRAM";
 
 export interface VibeCallArgs {
   program_file_path: string;
@@ -56,6 +57,15 @@ export const VIBE_RETURN_TOOL_PARAMETERS = [
   },
 ] as const satisfies readonly ThoughtcodeToolParameter[];
 
+export const VIBE_LOAD_PROGRAM_TOOL_PARAMETERS = [
+  {
+    name: "program_file_path",
+    type: "string",
+    description: "Path to the Thoughtcode program file to load.",
+    required: true,
+  },
+] as const satisfies readonly ThoughtcodeToolParameter[];
+
 export const VIBE_CALL_TOOL_DESCRIPTION: ThoughtcodeToolDescription = {
   name: VIBE_CALL_TOOL_NAME,
   label: "VIBECALL",
@@ -78,14 +88,30 @@ export const VIBE_RETURN_TOOL_DESCRIPTION: ThoughtcodeToolDescription = {
   ],
 };
 
+export const VIBE_LOAD_PROGRAM_TOOL_DESCRIPTION: ThoughtcodeToolDescription = {
+  name: VIBE_LOAD_PROGRAM_TOOL_NAME,
+  label: "VIBELOADPROGRAM",
+  description:
+    "Loads a ThoughtCode program file: validates its syntax and returns the source on success, or a syntax error on failure. " +
+    "Always use this tool to read a ThoughtCode program — never read it with cat or the read tool.",
+  promptSnippet:
+    "Use this tool to read any ThoughtCode program file before executing it",
+  promptGuidelines: [
+    "Always load a ThoughtCode program with the VIBELOADPROGRAM tool, never with `cat` or the `read` tool — VIBELOADPROGRAM validates the program's syntax before returning its source.",
+    "If VIBELOADPROGRAM reports a syntax error, stop execution immediately and report the error instead of guessing or running the program.",
+  ],
+};
+
 export const THOUGHTCODE_TOOL_DESCRIPTIONS = [
   VIBE_CALL_TOOL_DESCRIPTION,
   VIBE_RETURN_TOOL_DESCRIPTION,
+  VIBE_LOAD_PROGRAM_TOOL_DESCRIPTION,
 ] as const;
 
 export const THOUGHTCODE_SYSTEM_PROMPT = [
   "<!-- thoughtcode:begin -->",
   "You are an interpreter executing one VIBEFUNCTION of a ThoughtCode program. Follow these rules exactly:",
+  "0. Read the ThoughtCode program ONLY with the VIBELOADPROGRAM tool — never with `cat` or the `read` tool. It validates the program's syntax and returns the source. If it reports a syntax error, stop execution immediately and report the error.",
   "1. Interpret the body of the ENTRYPOINT VIBEFUNCTION yourself, statement by statement. Do NOT call the VIBECALL tool for the ENTRYPOINT function itself — you ARE its execution.",
   "2. When execution reaches a `VIBECALL <function>(<args>)` expression, you MUST obtain its value by calling the VIBECALL tool with that function name and args. Never read, inline, simulate, or compute the called function's body yourself — each VIBECALL runs as a separate call. This applies even when the called function is defined in the same file (including recursive self-calls).",
   "3. When execution reaches `VIBERETURN(<value>)`, you MUST report the result by calling the VIBERETURN tool with that value. Never write the return value as a plain-text reply — a value is only returned by calling the VIBERETURN tool.",
@@ -124,8 +150,34 @@ export function hasVibeFunction(programText: string, functionName: string): bool
   return new RegExp(`^\\s*VIBEFUNCTION\\s+${escapeRegExp(functionName)}\\s*\\(`, "m").test(programText);
 }
 
+/**
+ * List every `VIBEFUNCTION <name>(...) -> <returnType>` declaration that carries a return-type
+ * annotation. Untyped declarations are omitted (a missing return type is allowed). Used by syntax
+ * validation to check each declared return type.
+ */
+export function listVibeFunctionReturnTypes(programText: string): { name: string; returnType: string }[] {
+  const pattern = /^\s*VIBEFUNCTION\s+([A-Za-z_]\w*)\s*\([^)]*\)\s*->\s*(.+?)\s*$/gm;
+  const declarations: { name: string; returnType: string }[] = [];
+  for (let match = pattern.exec(programText); match !== null; match = pattern.exec(programText)) {
+    declarations.push({ name: match[1], returnType: match[2].trim() });
+  }
+  return declarations;
+}
+
 export function buildVibeFunctionNotFoundMessage(functionName: string, programFilePath: string): string {
   return `VIBEFUNCTION \`${functionName}\` is not defined in ${programFilePath}.`;
+}
+
+export function buildVibeLoadProgramUnreadableMessage(programFilePath: string): string {
+  return `Could not read ThoughtCode program at ${programFilePath}. Stop execution and report this error.`;
+}
+
+export function buildVibeProgramSyntaxErrorMessage(programFilePath: string, errors: string[]): string {
+  return [
+    `Syntax error in ThoughtCode program at ${programFilePath}:`,
+    ...errors.map((error) => `  - ${error}`),
+    "Stop execution; do not run this program until the error is fixed.",
+  ].join("\n");
 }
 
 export const THOUGHTCODE_VIBE_RETURN_REMINDER_MESSAGE =
@@ -153,7 +205,7 @@ export function buildVibeCallSubagentPrompt(args: VibeCallArgs): string {
     `ENTRYPOINT = ${args.name}`,
     `ENTRYPOINT_ARGS = ${args.args}`,
     `You are called to execute a VIBEFUNCTION.`,
-    `Read a ThoughtCode program at ${args.program_file_path} and start executing it at the point of VIBEFUNCTION, ` +
-      `corresponding to the ENTRYPOINT, and use the ENTRYPOINT_ARGS as arguments for it.`
+    `Load the ThoughtCode program at ${args.program_file_path} with the VIBELOADPROGRAM tool (never with cat or the read tool).`,
+    `Then start executing it at the VIBEFUNCTION corresponding to the ENTRYPOINT, using the ENTRYPOINT_ARGS as its arguments.`
   ].join("\n");
 }

@@ -1,5 +1,6 @@
 import {
   VIBE_CALL_TOOL_PARAMETERS,
+  VIBE_LOAD_PROGRAM_TOOL_PARAMETERS,
   VIBE_RETURN_TOOL_PARAMETERS,
   type ThoughtcodeToolParameter,
 } from "thoughtcode-core";
@@ -22,6 +23,8 @@ function thoughtcodeParametersToTypeBox<const TParameters extends readonly Thoug
 
 export const vibeCallParameters = thoughtcodeParametersToTypeBox(VIBE_CALL_TOOL_PARAMETERS);
 export const vibeReturnParameters = thoughtcodeParametersToTypeBox(VIBE_RETURN_TOOL_PARAMETERS);
+export const vibeLoadProgramParameters = thoughtcodeParametersToTypeBox(VIBE_LOAD_PROGRAM_TOOL_PARAMETERS);
 
 export type VibeCallParams = Static<typeof vibeCallParameters>;
 export type VibeReturnParams = Static<typeof vibeReturnParameters>;
+export type VibeLoadProgramParams = Static<typeof vibeLoadProgramParameters>;

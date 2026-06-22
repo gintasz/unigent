@@ -15,6 +15,7 @@ import {
   THOUGHTCODE_SYSTEM_PROMPT,
   VIBE_CALL_TOOL_NAME,
   VIBE_CALL_TOOL_PARAMETERS,
+  VIBE_LOAD_PROGRAM_TOOL_NAME,
   VIBE_RETURN_TOOL_NAME,
   VIBE_RETURN_TOOL_PARAMETERS,
   buildVibeCallSubagentPrompt,
@@ -85,7 +86,7 @@ describe("pi-thoughtcode", () => {
   it("exports the two Thoughtcode placeholder tools", () => {
     const tools = createThoughtcodeTools();
 
-    expect(tools.map((tool) => tool.name)).toEqual([VIBE_CALL_TOOL_NAME, VIBE_RETURN_TOOL_NAME]);
+    expect(tools.map((tool) => tool.name)).toEqual([VIBE_CALL_TOOL_NAME, VIBE_RETURN_TOOL_NAME, VIBE_LOAD_PROGRAM_TOOL_NAME]);
     expect(vibeCallTool.parameters.required).toEqual(VIBE_CALL_TOOL_PARAMETERS.map((parameter) => parameter.name));
     expect(vibeReturnTool.parameters.required).toEqual(VIBE_RETURN_TOOL_PARAMETERS.map((parameter) => parameter.name));
     for (const parameter of VIBE_CALL_TOOL_PARAMETERS) {
@@ -115,7 +116,11 @@ describe("pi-thoughtcode", () => {
       },
     } as never);
 
-    expect(registered.map((tool) => tool.name)).toEqual([VIBE_CALL_TOOL_NAME, VIBE_RETURN_TOOL_NAME]);
+    expect(registered.map((tool) => tool.name)).toEqual([
+      VIBE_CALL_TOOL_NAME,
+      VIBE_RETURN_TOOL_NAME,
+      VIBE_LOAD_PROGRAM_TOOL_NAME,
+    ]);
     expect(commands).toEqual(["thoughtcode-inspect"]);
     expect(beforeAgentStart?.({ systemPrompt: "Base prompt" }).systemPrompt).toBe(
       `Base prompt\n\n${THOUGHTCODE_SYSTEM_PROMPT}`,
@@ -745,7 +750,7 @@ describe("pi-thoughtcode", () => {
     // resolveReturnType, so a non-integer value must be rejected and force a retry — without a real LLM.
     await writeFile(
       join(cwd, "program.txt"),
-      ["VIBEFUNCTION main()", "VIBEFUNCTION fac(n: number) -> int", "    VIBERETURN(n)", ""].join("\n"),
+      ["VIBEFUNCTION main()", "VIBEFUNCTION fac(n: number) -> number.integer", "    VIBERETURN(n)", ""].join("\n"),
     );
     const authStorage = AuthStorage.inMemory();
     authStorage.setRuntimeApiKey("thoughtcode-typecheck-faux", "test-key");
