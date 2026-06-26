@@ -1,6 +1,9 @@
 # Core vs. Extension
 To support future agent harnesses, microfoom core MUST house all reusable language/runtime logic, while extensions (like pi-microfoom) contain only the bare minimum glue code.
 
+# Constitution
+Read CONSTITUTION.md before starting any codebase changes or evaluations.
+
 # Validation
 
 When a change is completed, always run full workspace tests, not just unit tests, not just package tests.
