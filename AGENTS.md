@@ -1,5 +1,5 @@
-# Distinction between microfoom core & agent harness extension
-In the future, microfoom will have support for many different agent harnesses, therefore all reusable language & runtime related code must sit inside a separate microfoom core package, whereare the harness extension like `pi-microfoom` should only contain BARE MINIMUM glue to connect the harness to the core.
+# Core vs. Extension
+To support future agent harnesses, microfoom core MUST house all reusable language/runtime logic, while extensions (like pi-microfoom) contain only the bare minimum glue code.
 
 # Validation
 
@@ -13,3 +13,4 @@ npm run build
 ```
 
 e2e skips (not fails) on provider/connection errors — red there means a real regression. The log shows why each call ended.
+
