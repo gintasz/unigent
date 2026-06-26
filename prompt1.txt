@@ -1,4 +1,0 @@
-ENTRYPOINT = main
-ENTRYPOINT_ARGS =
-You are called to execute a VIBEFUNCTION.
-Use VIBELOADPROGRAM tool to load ./program2.txt and start executing it at the point of VIBEFUNCTION, corresponding to the ENTRYPOINT, and use the ENTRYPOINT_ARGS as arguments for it.

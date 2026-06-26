@@ -1,5 +1,5 @@
-# Distinction between ThoughtCode core & agent harness extension
-In the future, ThoughtCode will have support for 20 different agent harnesses, therefore all reusable language & runtime related code must sit inside `thoughtcode-core`, whereare the harness extension like `pi-thoughtcode` should only contain minimal glue to connect the harness to the core.
+# Distinction between microfoom core & agent harness extension
+In the future, microfoom will have support for many different agent harnesses, therefore all reusable language & runtime related code must sit inside a separate microfoom core package, whereare the harness extension like `pi-microfoom` should only contain BARE MINIMUM glue to connect the harness to the core.
 
 # Validation
 

@@ -1,9 +1,0 @@
-ENTRYPOINT = main
-ENTRYPOINT_ARGS =
-Read ./lib.txt file.
-Then read ./program.txt and execute it literally.
-
-
-ENTRYPOINT = {paste entrypoint value here}
-ENTRYPOINT_ARGS = {paste args value here}
-Read ./program.txt and execute it literally.

@@ -1,9 +1,0 @@
-# ThoughtCode program
-
-VIBEFUNCTION main()
-	res = VIBECALL mul(a = 3, my number = 9)
-	VIBERETURN(res)
-
-VIBEFUNCTION mul(a: number, my number: number)
-	n = a * my number
-	VIBERETURN(n)
