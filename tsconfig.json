@@ -1,4 +1,8 @@
 {
   "files": [],
-  "references": [{ "path": "./packages/microfoom-core" }, { "path": "./packages/pi-microfoom" }]
+  "references": [
+    { "path": "./packages/microfoom-core" },
+    { "path": "./packages/pi-microfoom" },
+    { "path": "./packages/microfoom-cli" }
+  ]
 }

@@ -11,6 +11,8 @@ export type AgentEvent =
       readonly span: string;
       readonly parent?: string;
       readonly name: string;
+      /** What produced the span — drives the render glyph. Absent for manual scopes. */
+      readonly kind?: "program" | "method" | "turn" | "scope";
     }
   | {
       readonly type: "span_end";

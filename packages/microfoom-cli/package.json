@@ -1,0 +1,24 @@
+{
+  "name": "@microfoom/cli",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "microfoom": "./dist/cli.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "dependencies": {
+    "@microfoom/core": "workspace:*",
+    "@microfoom/pi": "workspace:*",
+    "cli-truncate": "4.0.0",
+    "log-update": "6.1.0",
+    "picocolors": "1.1.1",
+    "string-width": "7.2.0",
+    "tsx": "4.22.4"
+  }
+}

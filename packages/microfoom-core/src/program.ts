@@ -5,6 +5,7 @@
 // runs the shared coordinator, folds usage, and surfaces failures as the thrown
 // public taxonomy (F7). Plain Promise/async throughout; no effect-system layer.
 
+import { AsyncLocalStorage } from "node:async_hooks";
 import type { StandardSchemaV1 } from "@standard-schema/spec";
 import { type AgentConfig, durationToMs, mergeConfigChain } from "./config.js";
 import {
@@ -142,6 +143,13 @@ export interface RunProgramOptions {
   /** Harness-default config, the widest cascade scope. */
   readonly defaults?: AgentOptions;
   readonly signal?: AbortSignal;
+  /**
+   * Subscribe to the run's intrinsic event stream from outside the program (a CLI
+   * or harness renderer). Attached before `main()` runs, so the auto span tree
+   * (F8) is emitted from the first turn; when absent, nothing is emitted (zero
+   * cost on the common path).
+   */
+  readonly onEvent?: (event: AgentEvent) => void;
 }
 
 const PROTOCOL_PREAMBLE = [
@@ -190,10 +198,50 @@ interface Runtime {
   readonly nextSpan: () => string;
   depth: number;
   methodConfig: AgentConfig | undefined;
+  readonly spanALS: AsyncLocalStorage<string | undefined>;
 }
 
 function emitAll(runtime: Runtime, event: AgentEvent): void {
   for (const listener of runtime.listeners) listener(event);
+}
+
+/**
+ * Run `fn` inside an auto-instrumented span (F8): emits span_start/span_end with
+ * wall-clock duration and parents by call structure via AsyncLocalStorage, so a
+ * method invoked mid-turn nests under that turn. A no-op passthrough when nothing
+ * subscribes — the common path allocates no span and touches no async storage.
+ * Non-turn spans carry empty usage; the tree projection rolls usage up from the
+ * turn leaves (the real harness deltas).
+ */
+function withSpan<T>(
+  runtime: Runtime,
+  name: string,
+  kind: "program" | "method",
+  fn: () => Promise<T>,
+): Promise<T> {
+  if (runtime.listeners.size === 0) return fn();
+  const span = runtime.nextSpan();
+  const parent = runtime.spanALS.getStore();
+  emitAll(runtime, {
+    type: "span_start",
+    span,
+    name,
+    kind,
+    ...(parent !== undefined ? { parent } : {}),
+  });
+  const startedAt = Date.now();
+  return runtime.spanALS.run(span, async () => {
+    try {
+      return await fn();
+    } finally {
+      emitAll(runtime, {
+        type: "span_end",
+        span,
+        durationMs: Date.now() - startedAt,
+        usage: toAgentUsage(emptyUsage),
+      });
+    }
+  });
 }
 
 function deriveFor(runtime: Runtime, method: string): DerivedParameters | undefined {
@@ -245,7 +293,9 @@ function buildContext(runtime: Runtime): ProgramTurnContext {
       runtime.depth = previousDepth + 1;
       runtime.methodConfig = methodConfigOf(runtime, method);
       try {
-        const result = await fn.apply(runtime.instance, positional);
+        const result = await withSpan(runtime, method, "method", () =>
+          Promise.resolve(fn.apply(runtime.instance, positional)),
+        );
         return result === undefined ? "" : JSON.stringify(result);
       } finally {
         runtime.depth = previousDepth;
@@ -341,7 +391,18 @@ function makeRun(runtime: Runtime, options: AgentOptions, source: SessionSource)
   ) => {
     const prepared = prepare(runtime, options);
     const span = runtime.nextSpan();
-    if (runtime.listeners.size > 0) {
+    const traced = runtime.listeners.size > 0;
+    // A turn is a span leaf: its usage is the real harness delta(s) folded here.
+    let turnDelta = emptyUsage;
+    if (traced) {
+      const parent = runtime.spanALS.getStore();
+      emitAll(runtime, {
+        type: "span_start",
+        span,
+        name: options.label ?? mode.kind,
+        kind: "turn",
+        ...(parent !== undefined ? { parent } : {}),
+      });
       emitAll(
         runtime,
         options.label !== undefined
@@ -349,32 +410,44 @@ function makeRun(runtime: Runtime, options: AgentOptions, source: SessionSource)
           : { type: "turn_start", span },
       );
     }
+    const startedAt = Date.now();
     try {
       const session = await source.get();
-      return await runProgramTurn({
-        session,
-        systemPrompt: prepared.systemPrompt,
-        prompt,
-        mode,
-        ctx: buildContext(runtime),
-        caps: prepared.caps,
-        fold: (delta) => {
-          runtime.usage = combineUsage(runtime.usage, delta);
-          return runtime.usage;
-        },
-        ...(runtime.listeners.size > 0
-          ? { emit: (event: AgentEvent) => emitAll(runtime, event) }
-          : {}),
-        span,
-        ...(prepared.thinking !== undefined ? { thinking: prepared.thinking } : {}),
-        ...(options.onToken !== undefined ? { onToken: options.onToken } : {}),
-        ...(onStreamChunk !== undefined ? { onStreamChunk } : {}),
-        signal,
-      });
+      // Run the turn body under this span so a method the agent foom_calls
+      // mid-turn (and its own turns) nest beneath it.
+      return await runtime.spanALS.run(span, () =>
+        runProgramTurn({
+          session,
+          systemPrompt: prepared.systemPrompt,
+          prompt,
+          mode,
+          ctx: buildContext(runtime),
+          caps: prepared.caps,
+          fold: (delta) => {
+            if (traced) turnDelta = combineUsage(turnDelta, delta);
+            runtime.usage = combineUsage(runtime.usage, delta);
+            return runtime.usage;
+          },
+          ...(traced ? { emit: (event: AgentEvent) => emitAll(runtime, event) } : {}),
+          span,
+          ...(prepared.thinking !== undefined ? { thinking: prepared.thinking } : {}),
+          ...(options.onToken !== undefined ? { onToken: options.onToken } : {}),
+          ...(onStreamChunk !== undefined ? { onStreamChunk } : {}),
+          signal,
+        }),
+      );
     } catch (error) {
       if (signal.aborted) throw new FoomtimeCancelledError("the agent run was aborted");
       throw error;
     } finally {
+      if (traced) {
+        emitAll(runtime, {
+          type: "span_end",
+          span,
+          durationMs: Date.now() - startedAt,
+          usage: toAgentUsage(turnDelta),
+        });
+      }
       end();
     }
   };
@@ -547,11 +620,16 @@ export async function runProgram<R>(
     })(),
     depth: 0,
     methodConfig: undefined,
+    spanALS: new AsyncLocalStorage<string | undefined>(),
   };
+
+  // Wire an external subscriber (CLI/harness renderer) before main() runs, so the
+  // auto span tree is emitted from the first turn (F8).
+  if (options.onEvent !== undefined) runtime.listeners.add(options.onEvent);
 
   attachContext(instance, makeContext(runtime, {}));
 
-  const main = instance.main(input as never);
+  const main = withSpan(runtime, "main", "program", () => instance.main(input as never));
   const maxDuration = (ProgramClass as unknown as { maxProgramDuration?: string })
     .maxProgramDuration;
   if (maxDuration === undefined) return main;

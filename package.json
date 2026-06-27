@@ -27,6 +27,9 @@
     "dup": "jscpd packages",
     "api": "pnpm -r --if-present run api",
     "example": "node --import tsx examples/run.ts",
+    "cli": "node --import tsx packages/microfoom-cli/src/cli.ts",
+    "link": "pnpm run build && pnpm config set global-bin-dir \"$(npm prefix -g)/bin\" && cd packages/microfoom-cli && pnpm link --global",
+    "unlink": "cd packages/microfoom-cli && pnpm unlink --global",
     "check": "pnpm run typecheck && pnpm run format:check && pnpm run lint && pnpm run arch && pnpm run ast && pnpm run spell && pnpm run deps:check && pnpm run dead && pnpm run dup && pnpm run build && pnpm run test",
     "prepare": "lefthook install"
   },
