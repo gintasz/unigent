@@ -77,6 +77,9 @@ importers:
       '@microfoom/pi':
         specifier: workspace:*
         version: link:../pi-microfoom
+      '@microfoom/trace-view':
+        specifier: workspace:*
+        version: link:../trace-view
       cli-truncate:
         specifier: 4.0.0
         version: 4.0.0
@@ -113,15 +116,27 @@ importers:
       '@earendil-works/pi-coding-agent':
         specifier: 0.80.2
         version: 0.80.2(ws@8.21.0)(zod@4.4.3)
+      '@earendil-works/pi-tui':
+        specifier: 0.80.2
+        version: 0.80.2
       '@microfoom/core':
         specifier: workspace:*
         version: link:../microfoom-core
+      '@microfoom/trace-view':
+        specifier: workspace:*
+        version: link:../trace-view
       tsx:
         specifier: 4.22.4
         version: 4.22.4
       typebox:
         specifier: 1.1.38
         version: 1.1.38
+
+  packages/trace-view:
+    dependencies:
+      '@microfoom/core':
+        specifier: workspace:*
+        version: link:../microfoom-core
 
 packages:
 

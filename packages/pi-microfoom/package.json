@@ -14,13 +14,16 @@
     }
   },
   "scripts": {
-    "api": "api-extractor run --local --verbose"
+    "api": "api-extractor run --local --verbose",
+    "api:check": "api-extractor run --verbose"
   },
   "dependencies": {
     "@earendil-works/pi-agent-core": "0.80.2",
     "@earendil-works/pi-ai": "0.80.2",
     "@earendil-works/pi-coding-agent": "0.80.2",
+    "@earendil-works/pi-tui": "0.80.2",
     "@microfoom/core": "workspace:*",
+    "@microfoom/trace-view": "workspace:*",
     "tsx": "4.22.4",
     "typebox": "1.1.38"
   }

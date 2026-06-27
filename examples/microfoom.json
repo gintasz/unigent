@@ -1,9 +1,9 @@
 {
   "model": "openrouter/deepseek/deepseek-v4-flash",
   "programs": [
-    { "type": "command", "path": "hello.ts" },
+    { "disable_model_invocation": true, "path": "hello.ts" },
     {
-      "type": "tool",
+      "disable_model_invocation": false,
       "path": "hello.ts",
       "name": "hello",
       "description": "Return a warm, one-sentence greeting for a given name.",

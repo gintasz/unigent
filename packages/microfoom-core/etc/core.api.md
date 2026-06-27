@@ -268,7 +268,7 @@ export class FoomtimeInputError extends FoomtimeError {
 }
 
 // @public
-export abstract class FoomtimeProgram<I = string[], R = void> {
+export abstract class FoomtimeProgram<I = string[], R = unknown> {
     // (undocumented)
     protected get agent(): AgentProgramContext<this>;
     // (undocumented)
@@ -352,16 +352,18 @@ export interface NeutralToolDef {
     readonly name: string;
     // (undocumented)
     readonly parameters: JsonSchema;
+    readonly promptGuidelines?: readonly string[] | undefined;
+    readonly promptSnippet?: string | undefined;
 }
 
 // @public
 export type OpenSession = (options: HarnessSessionOptions) => Promise<HarnessSession> | HarnessSession;
 
 // @public
-export function Program<S extends StandardSchemaV1, R = void>(input: S): abstract new () => FoomtimeProgram<StandardSchemaV1.InferOutput<S>, R>;
+export function Program<S extends StandardSchemaV1, R = unknown>(input: S): abstract new () => FoomtimeProgram<StandardSchemaV1.InferOutput<S>, R>;
 
 // @public
-export function runProgram<R>(ProgramClass: abstract new () => FoomtimeProgram<never, R>, rawInput: unknown, options: RunProgramOptions): Promise<R>;
+export function runProgram<P extends FoomtimeProgram<never, unknown>>(ProgramClass: abstract new () => P, rawInput: unknown, options: RunProgramOptions): Promise<Awaited<ReturnType<P["main"]>>>;
 
 // @public
 export interface RunProgramOptions {
@@ -369,6 +371,8 @@ export interface RunProgramOptions {
     readonly defaults?: AgentOptions;
     // (undocumented)
     readonly model: string;
+    // Warning: (ae-forgotten-export) The symbol "AgentEvent" needs to be exported by the entry point index.d.ts
+    readonly onEvent?: (event: AgentEvent) => void;
     // (undocumented)
     readonly openSession: OpenSession;
     // (undocumented)

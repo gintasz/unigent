@@ -22,6 +22,7 @@ function mockPi() {
       commands.set(name, options),
     registerTool: (tool: { name: string; description: string; parameters: unknown }) =>
       tools.set(tool.name, tool),
+    registerMessageRenderer: () => {},
   } as unknown as ExtensionAPI;
   return { pi, commands, tools };
 }
@@ -35,8 +36,13 @@ describe("extension program registration", () => {
       JSON.stringify({
         model: "fake",
         programs: [
-          { type: "command", path: fixture },
-          { type: "tool", path: fixture, name: "doubler", description: "Doubles a number" },
+          { disable_model_invocation: true, path: fixture },
+          {
+            disable_model_invocation: false,
+            path: fixture,
+            name: "doubler",
+            description: "Doubles a number",
+          },
         ],
       }),
     );

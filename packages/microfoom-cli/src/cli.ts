@@ -13,8 +13,8 @@ import { parseArgs } from "node:util";
 import { runProgram } from "@microfoom/core";
 import { type AgentEvent, buildRunTree } from "@microfoom/core/trace";
 import { createPiOpenSession } from "@microfoom/pi";
+import { fmtSummary } from "@microfoom/trace-view";
 import { fauxOpenSession } from "./faux.js";
-import { fmtSummary } from "./format.js";
 import { loadProgram } from "./loader.js";
 import { attachPanel } from "./panel.js";
 

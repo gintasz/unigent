@@ -6,7 +6,7 @@
 // this module's default export as an extension.
 
 import { existsSync } from "node:fs";
-import { isAbsolute, join, resolve } from "node:path";
+import { basename, isAbsolute, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import {
   defineTool,
@@ -20,10 +20,12 @@ import {
   type OpenSession,
   runProgram,
 } from "@microfoom/core";
+import type { AgentEvent } from "@microfoom/core/trace";
 import { register } from "tsx/esm/api";
 import { Type } from "typebox";
 import { loadConfig, type ResolvedProgram } from "./config.js";
 import { createPiOpenSession } from "./index.js";
+import { registerTraceRenderer, startRunPresentation } from "./present_run.js";
 
 // `pi` runs under plain `node` with no TS loader, so program files (TypeScript
 // syntax, `@foom` decorators) can't be `import()`ed as-is. Register tsx on the
@@ -51,13 +53,19 @@ export async function runProgramFile(
   input: unknown,
   openSession: OpenSession,
   model: string,
+  onEvent?: (event: AgentEvent) => void,
 ): Promise<unknown> {
   const moduleExports = (await import(pathToFileURL(sourceFile).href)) as { default?: unknown };
   const ProgramClass = moduleExports.default as ProgramClass | undefined;
   if (typeof ProgramClass !== "function") {
     throw new TypeError(`${sourceFile} has no default-exported program`);
   }
-  return runProgram(ProgramClass, input, { openSession, model, sourceFile });
+  return runProgram(ProgramClass, input, {
+    openSession,
+    model,
+    sourceFile,
+    ...(onEvent !== undefined ? { onEvent } : {}),
+  });
 }
 
 // Command args are free text: JSON when it looks like JSON, else the raw string.
@@ -86,15 +94,18 @@ function registerProgram(
     pi.registerCommand(program.name, {
       description: program.description,
       handler: async (args, ctx) => {
+        const presenter = startRunPresentation(pi, ctx, program.name, { injectResult: true });
         try {
           const result = await runProgramFile(
             program.sourceFile,
             parseCommandInput(args),
             createPiOpenSession(),
             model,
+            presenter.onEvent,
           );
-          ctx.ui.notify(`${program.name}: ${JSON.stringify(result)}`, "info");
+          presenter.done(result);
         } catch (error) {
+          presenter.fail();
           ctx.ui.notify(`${program.name} error: ${errorMessage(error)}`, "error");
         }
       },
@@ -116,27 +127,39 @@ function registerProgram(
       ...(program.promptGuidelines !== undefined
         ? { promptGuidelines: [...program.promptGuidelines] }
         : {}),
-      execute: async (_id: string, params: unknown) => {
+      execute: async (_id, params, _signal, _onUpdate, ctx) => {
         const input =
           inputName !== undefined ? (params as Record<string, unknown>)[inputName] : undefined;
-        const result = await runProgramFile(
-          program.sourceFile,
-          input,
-          createPiOpenSession(),
-          model,
-        );
-        return {
-          content: [
-            { type: "text", text: typeof result === "string" ? result : JSON.stringify(result) },
-          ],
-          details: {},
-        };
+        const presenter = startRunPresentation(pi, ctx, program.name, { injectResult: false });
+        try {
+          const result = await runProgramFile(
+            program.sourceFile,
+            input,
+            createPiOpenSession(),
+            model,
+            presenter.onEvent,
+          );
+          presenter.done(result);
+          return {
+            content: [
+              { type: "text", text: typeof result === "string" ? result : JSON.stringify(result) },
+            ],
+            details: {},
+          };
+        } catch (error) {
+          presenter.fail();
+          throw error;
+        }
       },
     }),
   );
 }
 
-async function runCommand(args: string, ctx: ExtensionCommandContext): Promise<void> {
+async function runCommand(
+  pi: ExtensionAPI,
+  args: string,
+  ctx: ExtensionCommandContext,
+): Promise<void> {
   const trimmed = args.trim();
   if (trimmed.length === 0) {
     ctx.ui.notify("usage: /microfoom-run <program-path> [json-input]", "error");
@@ -147,24 +170,29 @@ async function runCommand(args: string, ctx: ExtensionCommandContext): Promise<v
   const rawInput = space < 0 ? "" : trimmed.slice(space + 1).trim();
   const sourceFile = isAbsolute(rawPath) ? rawPath : resolve(ctx.cwd, rawPath);
 
+  const presenter = startRunPresentation(pi, ctx, basename(rawPath), { injectResult: true });
   try {
     const result = await runProgramFile(
       sourceFile,
       parseCommandInput(rawInput),
       createPiOpenSession(),
       DEFAULT_MODEL,
+      presenter.onEvent,
     );
-    ctx.ui.notify(`microfoom result: ${JSON.stringify(result)}`, "info");
+    presenter.done(result);
   } catch (error) {
+    presenter.fail();
     ctx.ui.notify(`microfoom error: ${errorMessage(error)}`, "error");
   }
 }
 
 /** The extension factory pi invokes with its API. */
 const microfoomExtension: ExtensionFactory = (pi: ExtensionAPI) => {
+  registerTraceRenderer(pi);
+
   pi.registerCommand("microfoom-run", {
     description: "Run a microfoom program: /microfoom-run <program-path> [json-input]",
-    handler: runCommand,
+    handler: (args, ctx) => runCommand(pi, args, ctx),
   });
 
   // Register programs listed in microfoom.json (MICROFOOM_CONFIG or ./microfoom.json).

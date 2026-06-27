@@ -1,7 +1,9 @@
 // microfoom extension config (microfoom.json): an explicit list of program files
-// to register as pi slash-commands (user-callable) or tools (agent-callable). No
-// folder scanning — paths are explicit. Validated by hand (clear, indexed errors);
-// duplicate names are rejected per namespace (commands vs tools are separate).
+// to register with pi. Each entry's `disable_model_invocation` picks the surface:
+// `true` → a user-only slash-command (the model can't invoke it); `false` → an
+// agent-callable tool. No folder scanning — paths are explicit. Validated by hand
+// (clear, indexed errors); duplicate names are rejected per namespace (commands
+// vs tools are separate, so the same name can be registered as both).
 
 import { readFileSync } from "node:fs";
 import { dirname, parse, resolve } from "node:path";
@@ -75,12 +77,18 @@ export function parseConfig(raw: unknown, configDir: string): LoadedConfig {
     const sourceFile = resolve(configDir, path);
     const name = optionalString(record.name, `${where}.name`) ?? parse(path).name;
     const model = optionalString(record.model, `${where}.model`);
-    const type = record.type;
-    if (type !== "command" && type !== "tool") {
-      throw new FoomtimeConfigError(`${where}.type must be "command" or "tool"`);
+    // The surface discriminator. Required (no default): exposing a program to the
+    // model is a deliberate per-entry choice, never implicit (cf. F3 — capability
+    // opt-in). true → user-only command; false → agent-callable tool.
+    const disableModelInvocation = record.disable_model_invocation;
+    if (typeof disableModelInvocation !== "boolean") {
+      throw new FoomtimeConfigError(
+        `${where}.disable_model_invocation must be a boolean ` +
+          `(true = user-only command, false = agent-callable tool)`,
+      );
     }
 
-    if (type === "command") {
+    if (disableModelInvocation) {
       if (commandNames.has(name)) {
         throw new FoomtimeConfigError(`duplicate command name "${name}" (${where})`);
       }

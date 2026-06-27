@@ -1,5 +1,5 @@
 {
-  "name": "@microfoom/core",
+  "name": "@microfoom/trace-view",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -7,10 +7,6 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
-    },
-    "./trace": {
-      "types": "./dist/trace/index.d.ts",
-      "default": "./dist/trace/index.js"
     }
   },
   "scripts": {
@@ -18,7 +14,6 @@
     "api:check": "api-extractor run --verbose"
   },
   "dependencies": {
-    "@standard-schema/spec": "1.1.0",
-    "typescript": "5.9.3"
+    "@microfoom/core": "workspace:*"
   }
 }
