@@ -14,15 +14,15 @@ module.exports = {
     {
       name: "core-stays-generic",
       severity: "error",
-      comment: "The generic core must never import a harness or the cli (A3/F6).",
+      comment: "The generic core must never import an adapter or a frontend (A3/F6).",
       from: { path: "^packages/microfoom-core/src" },
-      to: { path: "^packages/(pi-microfoom|microfoom-cli)/" },
+      to: { path: "^packages/(pi-adapter|microfoom-cli)/" },
     },
     {
-      name: "no-harness-importing-cli",
+      name: "no-adapter-importing-cli",
       severity: "error",
-      comment: "A harness adapter must not depend on the cli (A3).",
-      from: { path: "^packages/pi-microfoom/src" },
+      comment: "The pi harness adapter must not depend on the cli frontend (A3).",
+      from: { path: "^packages/pi-adapter/src" },
       to: { path: "^packages/microfoom-cli/" },
     },
     {

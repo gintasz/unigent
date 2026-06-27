@@ -1,7 +1,5 @@
-// Tiny pure formatters for run-trace presentation (panel rows + footer summary).
-// Kept apart so they are trivially unit-testable (no ANSI, no IO). Shared by every
-// frontend (CLI text panel, pi TUI widget) so duration/cost/token strings are
-// identical across surfaces.
+// Tiny pure formatters for the run panel and footer. Kept apart so they are
+// trivially unit-testable (no ANSI, no IO).
 
 import type { AgentUsage } from "@microfoom/core/trace";
 
@@ -22,7 +20,7 @@ export function fmtTokens(total: number): string {
   return `${total}tok`;
 }
 
-/** One-line run summary for a footer/status line. */
+/** One-line run summary for the footer (stderr). */
 export function fmtSummary(usage: AgentUsage, durationMs: number | undefined): string {
   const parts = [fmtDuration(durationMs), fmtTokens(usage.totalTokens)];
   const cost = fmtCost(usage.costUsd);

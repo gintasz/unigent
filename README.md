@@ -51,22 +51,22 @@ derived from the TypeScript signature).
 | Package | Role |
 | --- | --- |
 | `@microfoom/core` | Harness-agnostic runtime: program model, `@foom` decorators, config cascade, schema derivation, FOOM tool semantics, error taxonomy. Effect-free public surface. |
-| `@microfoom/pi` | The reference harness over the [pi](https://github.com/earendil-works/pi) agent: runs programs against a real model and ships the `/microfoom-run` pi extension. |
+| `@microfoom/pi-adapter` | The reference harness adapter over the [pi](https://github.com/earendil-works/pi) agent: binds core's session port to pi's runtime so programs run against a real model. |
+| `@microfoom/cli` | The `microfoom run` CLI: run a program file, result to stdout, live trace panel to stderr. |
 
 ## Running a program
 
-**As a pi extension** — install `@microfoom/pi/extension` into your `pi` agent,
-then in `pi`:
+**Via the CLI** (the agent runs this over bash; result → stdout, trace → stderr):
 
 ```
-/microfoom-run ./my-program.ts
+microfoom run ./my-program.ts [input]
 ```
 
 **Programmatically:**
 
 ```ts
 import { runProgram } from "@microfoom/core";
-import { createPiOpenSession } from "@microfoom/pi";
+import { createPiOpenSession } from "@microfoom/pi-adapter";
 
 const result = await runProgram(MyProgram, input, {
   openSession: createPiOpenSession(), // resolves model + auth from ~/.pi

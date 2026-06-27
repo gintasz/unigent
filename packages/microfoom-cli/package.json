@@ -18,8 +18,7 @@
   },
   "dependencies": {
     "@microfoom/core": "workspace:*",
-    "@microfoom/pi": "workspace:*",
-    "@microfoom/trace-view": "workspace:*",
+    "@microfoom/pi-adapter": "workspace:*",
     "cli-truncate": "4.0.0",
     "log-update": "6.1.0",
     "picocolors": "1.1.1",

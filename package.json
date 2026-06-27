@@ -38,7 +38,7 @@
     "@ast-grep/cli": "0.44.0",
     "@biomejs/biome": "2.5.1",
     "@microfoom/core": "workspace:*",
-    "@microfoom/pi": "workspace:*",
+    "@microfoom/pi-adapter": "workspace:*",
     "@microsoft/api-extractor": "7.58.9",
     "@swc/core": "1.15.43",
     "@total-typescript/ts-reset": "0.6.1",

@@ -1,5 +1,5 @@
-# Core vs. Extension
-To support future agent harnesses, microfoom core MUST house all reusable language/runtime logic, while extensions (like pi-microfoom) contain only the bare minimum glue code.
+# Core vs. Adapter
+To support future agent harnesses, microfoom core MUST house all reusable language/runtime logic, while the harness adapter and frontends (like `@microfoom/pi-adapter` and `@microfoom/cli`) contain only the bare minimum glue code.
 
 # Constitution
 Read CONSTITUTION.md before starting any codebase changes or evaluations.

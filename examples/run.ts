@@ -2,7 +2,7 @@
 // via the pi harness, then runs the program and prints its result.
 
 import { runProgram } from "@microfoom/core";
-import { createPiOpenSession } from "@microfoom/pi";
+import { createPiOpenSession } from "@microfoom/pi-adapter";
 import Hello from "./hello.ts";
 
 const who = process.argv[2] ?? "world";

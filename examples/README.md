@@ -28,20 +28,12 @@ MICROFOOM_LOG=/tmp/microfoom/hello.jsonl pnpm run example -- Ada
 cat /tmp/microfoom/hello.jsonl   # one JSON record per model turn
 ```
 
-### Or, inside `pi` (the extension)
+### Or, via the CLI
 
-With the `@microfoom/pi/extension` installed in your pi agent, you can always run
-any program ad-hoc:
+The `microfoom run` CLI runs any program file directly — this is how an agent
+invokes a program over bash (result on stdout, trace on stderr):
 
 ```
-/microfoom-run examples/hello.ts world
+microfoom run examples/hello.ts Ada
 ```
-
-Or register programs from a config (`microfoom.json` — see this folder's sample)
-so they show up as their own commands/tools. With `MICROFOOM_CONFIG` pointed at
-`examples/microfoom.json`, the sample registers:
-
-- `/hello world` — a user slash-command, and
-- a `hello` **tool** the agent itself can call (params derived from the program's
-  `main` input).
 

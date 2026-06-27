@@ -1,6 +1,10 @@
 # ADR-0001: Toolchain and monorepo layout
 
-- **Status:** accepted (revised 2026-06-27: added `@microfoom/trace-view`)
+- **Status:** accepted (revised 2026-06-27: renamed `@microfoom/pi` →
+  `@microfoom/pi-adapter`. A pi extension + a shared `@microfoom/trace-view`
+  package were prototyped then removed — the agent invokes programs via the CLI
+  over bash, leaving one frontend, so neither earned its keep; the trace renderer
+  folded back into the CLI.)
 - **Date:** 2026-06-26
 - **Constitution refs:** L1 (toolchain), A1, A2, A3, A4, DEP2, DEP3, C3 — plus the enforcement-class citations in B2, B9, L3, N5, T1, OB1, OB3, Q6, F3, F6, F8, V1 that name a tool *class* and defer the concrete instance here. (X2/L2/S1 — Effect-internal — are **superseded by ADR-0002**.)
 
@@ -20,23 +24,19 @@ not an edit to the governing principles.
 - **Monorepo:** pnpm strict workspaces. Packages:
   - `@microfoom/core` (`packages/microfoom-core`) — generic, harness-agnostic
     runtime and language logic. Depends on no harness.
-  - `@microfoom/pi` (`packages/pi-microfoom`) — the reference harness over the
-    `@earendil-works` pi agent (`pi-agent-core` `Agent`, `pi-coding-agent`
-    ModelRegistry/AuthStorage, `pi-ai` providers). Thin glue; also ships the
-    `/microfoom-run` pi extension and its TUI trace presentation.
-  - `@microfoom/trace-view` (`packages/trace-view`) — frontend-neutral run-trace
-    presentation: shapes a `@microfoom/core/trace` `RunNode` tree into ordered
-    rows + the duration/token/cost metric strings, painting nothing. Shared by the
-    CLI text panel and the pi TUI widget so the two surfaces never drift. Depends
-    only on core (types); no harness, no UI library. This is the presentation
-    boundary's neutral half — core stays paint-free (F8), each frontend owns its
-    own paint (picocolors/log-update for the CLI; Box/Text + theme for pi).
+  - `@microfoom/pi-adapter` (`packages/pi-adapter`) — the reference harness
+    **adapter**: the sole binding from core's harness port (`OpenSession` /
+    `HarnessSession`) to the `@earendil-works` pi runtime (`pi-agent-core` `Agent`,
+    `pi-coding-agent` ModelRegistry/AuthStorage, `pi-ai` providers). Thin glue, no
+    extension/TUI concerns. Consumed by the CLI.
   - `@microfoom/cli` (`packages/microfoom-cli`) — the `microfoom run` CLI
-    frontend (live `log-update` panel + faux session). Depends on pi, core, and
-    trace-view.
-  - Dependency direction (A3): cli → {pi, core, trace-view}; pi → {core,
-    trace-view}; trace-view → core (types only); core imports nothing downstream
-    and no harness.
+    frontend: runs a program file (result → stdout, live trace → stderr), with the
+    run-trace rendering (RunNode → panel string) and a faux session living here.
+    Depends on pi-adapter and core. (The agent invokes programs by shelling out to
+    this CLI; core stays paint-free — F8.)
+  - Dependency direction (A3): cli → {pi-adapter, core}; pi-adapter → core; core
+    imports nothing downstream and no harness. The adapter never imports the cli
+    (enforced by dependency-cruiser).
 - **Build/types:** TypeScript strict + `noUncheckedIndexedAccess`,
   `exactOptionalPropertyTypes`, `noImplicitOverride`, `noFallthroughCasesInSwitch`;
   ESM, NodeNext; `tsc -b` project references are build-authoritative; ts-reset for

@@ -1,9 +1,9 @@
-// CLI text painter: turns the frontend-neutral trace rows (@microfoom/trace-view)
-// into a multi-line string panel — ANSI color by span kind, right-aligned metrics,
-// label truncation when a row would overflow the terminal width. The row shaping
-// (tree walk, labels, metric strings) lives in trace-view so the pi TUI widget
-// renders the identical data; this file owns only the CLI's paint. No IO, no live
-// redraw here; `panel.ts` drives the redraw, this turns a tree snapshot into text.
+// Render a run's span tree into the CLI's text panel. Two halves in one file:
+// shaping (the tree walk → flat, ordered rows with label/metric strings, no
+// color) and painting (rows → a multi-line string: ANSI by span kind, right-
+// aligned metrics, label truncation on overflow). No IO, no live redraw here;
+// `panel.ts` drives the redraw, this turns a tree snapshot into text. The tree
+// itself comes from `@microfoom/core/trace` (buildRunTree).
 //
 //   ▼ main                                12.4s  21tok  $0.21
 //     ▸ discoverRoutes                     2.1s   2tok  $0.02
@@ -12,10 +12,75 @@
 //       • 3 routes audited
 
 import type { RunNode } from "@microfoom/core/trace";
-import { renderRows, type TraceSpanRow } from "@microfoom/trace-view";
 import cliTruncate from "cli-truncate";
 import pc from "picocolors";
 import stringWidth from "string-width";
+import { fmtCost, fmtDuration, fmtTokens } from "./format.js";
+
+// --- shaping: span tree → ordered rows -------------------------------------
+
+/** A span node, flattened: label/metrics precomputed, depth for indentation. */
+interface TraceSpanRow {
+  readonly type: "span";
+  readonly depth: number;
+  /** `▼` when the span has children, `▸` when it is a leaf. */
+  readonly glyph: "▼" | "▸";
+  readonly kind: RunNode["kind"];
+  /** name + `k=v` annotations + `⟳n` repairs + ` …` while still open. */
+  readonly label: string;
+  /** `12.4s  21tok  $0.21` (cost omitted when underivable). */
+  readonly metrics: string;
+}
+
+/** A log line attached to a span, emitted after that span's child rows. */
+interface TraceLogRow {
+  readonly type: "log";
+  readonly depth: number;
+  readonly message: string;
+  readonly level: "info" | "warn" | "error";
+}
+
+type TraceRow = TraceSpanRow | TraceLogRow;
+
+function labelOf(node: RunNode): string {
+  let label = node.name;
+  const entries = Object.entries(node.annotations);
+  if (entries.length > 0) label += `  ${entries.map(([k, v]) => `${k}=${String(v)}`).join(" ")}`;
+  if (node.repairs > 0) label += ` ⟳${node.repairs}`;
+  if (!node.settled) label += " …";
+  return label;
+}
+
+function metricsOf(node: RunNode): string {
+  const parts = [fmtDuration(node.durationMs), fmtTokens(node.usage.totalTokens)];
+  const cost = fmtCost(node.usage.costUsd);
+  if (cost.length > 0) parts.push(cost);
+  return parts.join("  ");
+}
+
+function pushNode(node: RunNode, depth: number, out: TraceRow[]): void {
+  out.push({
+    type: "span",
+    depth,
+    glyph: node.children.length > 0 ? "▼" : "▸",
+    kind: node.kind,
+    label: labelOf(node),
+    metrics: metricsOf(node),
+  });
+  for (const child of node.children) pushNode(child, depth + 1, out);
+  // Logs render after children, matching how the events landed in time.
+  for (const log of node.logs) {
+    out.push({ type: "log", depth, message: log.message, level: log.level });
+  }
+}
+
+function rowsOf(root: RunNode): TraceRow[] {
+  const out: TraceRow[] = [];
+  pushNode(root, 0, out);
+  return out;
+}
+
+// --- painting: rows → a colored, width-aligned panel string ----------------
 
 export interface RenderOptions {
   /** Terminal width to right-align metrics to. Default 80. */
@@ -52,7 +117,7 @@ export function renderRunTree(root: RunNode, options: RenderOptions = {}): strin
   const width = options.width ?? 80;
   const color = options.color ?? false;
   const out: string[] = [];
-  for (const row of renderRows(root)) {
+  for (const row of rowsOf(root)) {
     if (row.type === "span") {
       out.push(renderSpan(row, width, color));
       continue;

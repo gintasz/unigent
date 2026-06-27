@@ -40,6 +40,15 @@ describe("renderRunTree", () => {
     expect(lines[1].trimEnd().endsWith("$0.0200")).toBe(true);
   });
 
+  it("folds repairs (⟳n) and an open-span ellipsis into the label", () => {
+    const open: AgentEvent[] = [
+      { type: "span_start", span: "s", name: "audit", kind: "turn" },
+      { type: "repair", span: "s", attempt: 1 },
+    ];
+    const out = renderRunTree(buildRunTree(open), { width: 40, color: false });
+    expect(out).toContain("audit ⟳1 …");
+  });
+
   it("truncates an overflowing label instead of breaking the layout", () => {
     const long: AgentEvent[] = [
       { type: "span_start", span: "s", name: "x".repeat(200), kind: "turn" },

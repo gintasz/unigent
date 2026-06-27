@@ -1,5 +1,5 @@
 {
-  "name": "@microfoom/trace-view",
+  "name": "@microfoom/pi-adapter",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -14,6 +14,10 @@
     "api:check": "api-extractor run --verbose"
   },
   "dependencies": {
-    "@microfoom/core": "workspace:*"
+    "@earendil-works/pi-agent-core": "0.80.2",
+    "@earendil-works/pi-ai": "0.80.2",
+    "@earendil-works/pi-coding-agent": "0.80.2",
+    "@microfoom/core": "workspace:*",
+    "typebox": "1.1.38"
   }
 }

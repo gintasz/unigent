@@ -5,10 +5,7 @@
 ```ts
 
 import { AgentEvent } from '@microfoom/core/trace';
-import { fmtCost } from '@microfoom/trace-view';
-import { fmtDuration } from '@microfoom/trace-view';
-import { fmtSummary } from '@microfoom/trace-view';
-import { fmtTokens } from '@microfoom/trace-view';
+import type { AgentUsage } from '@microfoom/core/trace';
 import type { FoomtimeProgram } from '@microfoom/core';
 import { OpenSession } from '@microfoom/core';
 import type { RunNode } from '@microfoom/core/trace';
@@ -19,13 +16,17 @@ export function attachPanel(stream: NodeJS.WriteStream): Panel;
 // @public (undocumented)
 export function fauxOpenSession(): OpenSession;
 
-export { fmtCost }
+// @public
+export function fmtCost(costUsd: number | undefined): string;
 
-export { fmtDuration }
+// @public
+export function fmtDuration(ms: number | undefined): string;
 
-export { fmtSummary }
+// @public
+export function fmtSummary(usage: AgentUsage, durationMs: number | undefined): string;
 
-export { fmtTokens }
+// @public
+export function fmtTokens(total: number): string;
 
 // @public
 export function loadProgram(sourceFile: string): Promise<ProgramClass>;

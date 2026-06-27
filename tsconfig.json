@@ -2,8 +2,7 @@
   "files": [],
   "references": [
     { "path": "./packages/microfoom-core" },
-    { "path": "./packages/trace-view" },
-    { "path": "./packages/pi-microfoom" },
+    { "path": "./packages/pi-adapter" },
     { "path": "./packages/microfoom-cli" }
   ]
 }

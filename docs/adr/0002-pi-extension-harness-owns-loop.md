@@ -1,6 +1,10 @@
 # ADR-0002: pi-extension deployment; the harness owns the turn loop
 
-- **Status:** accepted (revises the initial "core owns the loop" decision)
+- **Status:** accepted (revises the initial "core owns the loop" decision). NOTE
+  2026-06-27: the pi-*extension* deployment described below was prototyped then
+  removed — the agent invokes programs via the CLI (`microfoom run`) over bash. The
+  decision here — **the harness/adapter owns the loop** — is unchanged and
+  load-bearing; only the delivery surface changed (extension → CLI).
 - **Date:** 2026-06-26
 - **Constitution refs:** A1, A3, F1, F2, F6, F8, X2, L2, C3
 
@@ -22,11 +26,11 @@ in the real deployment **pi owns the model loop and executes the tools**.
   a code, inspect a schema) and the thin `runProgramTurn` that interprets the
   captured outcome and enforces caps. Both the pi session and the deterministic
   faux test session drive the *same* handlers — no duplicated loop.
-- **pi-microfoom** maps neutral ↔ pi: each turn runs a `pi-agent-core` `Agent`
-  (its loop, FOOM ops as `AgentTool`s) with model + auth resolved from `~/.pi`
-  (coding-agent `ModelRegistry`/`AuthStorage`) and `pi-ai` providers. The
-  `/microfoom-run` command (`@microfoom/pi/extension`) loads a program and runs it
-  against a programmatic pi sub-session per run.
+- **`@microfoom/pi-adapter`** maps neutral ↔ pi: each turn runs a `pi-agent-core`
+  `Agent` (its loop, FOOM ops as `AgentTool`s) with model + auth resolved from
+  `~/.pi` (coding-agent `ModelRegistry`/`AuthStorage`) and `pi-ai` providers. The
+  CLI (`microfoom run`) loads a program and runs it against a programmatic pi
+  sub-session per run.
 - **Effect-internal (X2/L2) is superseded.** With the loop owned by pi, core is no
   longer an Effect program: domain logic is pure values, usage accounting stays a
   `@effect/typeclass` Monoid (OB3), and the harness seam is plain Promise with the

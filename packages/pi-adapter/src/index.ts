@@ -1,10 +1,11 @@
-// The pi harness adapter (the reference extension). microfoom programs run as a
+// The pi harness adapter: the sole binding between core's harness port
+// (OpenSession/HarnessSession) and pi's runtime. microfoom programs run as a
 // programmatic pi agent: each turn drives a pi-agent-core `Agent` whose loop owns
 // the model calls and EXECUTES the FOOM tools (ADR-0002 rev). Core supplies the
 // neutral tool semantics + the turn coordinator; this maps them ↔ pi. The
 // configured stream function (model + auth + providers from ~/.pi) is obtained
-// from pi's own `createAgentSession` — a MAIN export, so pi's extension loader
-// (which does not resolve package `exports` subpaths) can load this module.
+// from pi's own `createAgentSession`. Consumed by the CLI (and any future
+// frontend); it carries no extension/TUI concerns of its own.
 
 import { appendFileSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
