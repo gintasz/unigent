@@ -1,8 +1,8 @@
 // Public result wrappers at the facade (F6). An AgentResult is a PromiseLike that
 // also exposes abort() and a live usage snapshot; an AgentTextStream additionally
-// yields chunks. Effect is invisible here — consumers await Promises and catch the
-// thrown taxonomy (F7). Cancellation maps an AbortController to Effect
-// interruption inside the runner.
+// yields chunks. Consumers await Promises and catch the thrown taxonomy (F7).
+// Cancellation is an AbortController; abort() rejects the awaiter with
+// FoomtimeCancelledError.
 
 import type { AgentUsage } from "./usage.js";
 

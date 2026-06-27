@@ -3,8 +3,7 @@
 // the config cascade (F5), builds the per-run dispatch context + tool semantics
 // (tools.ts), opens a harness session per stateless turn (or once per session()),
 // runs the shared coordinator, folds usage, and surfaces failures as the thrown
-// public taxonomy (F7). Pure domain (config/usage/validation) stays Effect-based
-// where it lives; this orchestration seam is plain Promise.
+// public taxonomy (F7). Plain Promise/async throughout; no effect-system layer.
 
 import type { StandardSchemaV1 } from "@standard-schema/spec";
 import { type AgentConfig, durationToMs, mergeConfigChain } from "./config.js";

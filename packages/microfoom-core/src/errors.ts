@@ -1,5 +1,5 @@
 // Public error taxonomy (F7). These are the thrown, consumer-facing classes at
-// the Promise/exception facade (F6) — plain Error subclasses, never Effect.
+// the Promise/exception facade (F6) — plain Error subclasses.
 // Every failure is a subclass of FoomtimeError, discriminated by `instanceof`.
 //
 //   FoomtimeError                      base for all of the below

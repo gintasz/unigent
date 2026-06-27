@@ -5,7 +5,8 @@ pre-commit:
   commands:
     format:
       glob: "*.{ts,js,json,md}"
-      run: pnpm exec biome check --error-on-warnings {staged_files}
+      run: pnpm exec biome check --write --error-on-warnings {staged_files}
+      stage_fixed: true
     typecheck:
       run: pnpm run typecheck
     spell:

@@ -2,7 +2,7 @@
 // associative combine — folded once, never hand-summed at call sites. The internal
 // carrier `UsageAccount` has every accounting field present (cost/optional token
 // counts as `number | undefined`); the public `AgentUsage` is its compacted
-// projection plus live timestamps (T5). Plain functions (no Effect): the combine
+// projection plus live timestamps (T5). Plain functions: the combine
 // is small and its laws are pinned by property tests.
 
 /**

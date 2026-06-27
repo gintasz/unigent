@@ -20,9 +20,18 @@ import {
   type OpenSession,
   runProgram,
 } from "@microfoom/core";
+import { register } from "tsx/esm/api";
 import { Type } from "typebox";
 import { loadConfig, type ResolvedProgram } from "./config.js";
 import { createPiOpenSession } from "./index.js";
+
+// `pi` runs under plain `node` with no TS loader, so program files (TypeScript
+// syntax, `@foom` decorators) can't be `import()`ed as-is. Register tsx on the
+// host's module loader once — globally, so each program and its `@microfoom/core`
+// import resolve into the *same* module graph as this extension. (A scoped
+// loader duplicates core, splitting the program→agent WeakMap binding so
+// `this.agent` reads an empty map and throws.)
+register();
 
 /** Default model when neither @foom.config, the config, nor MICROFOOM_MODEL set one. */
 const DEFAULT_MODEL = process.env.MICROFOOM_MODEL ?? "openrouter/deepseek/deepseek-v4-flash";

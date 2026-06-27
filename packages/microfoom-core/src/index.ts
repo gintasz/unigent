@@ -1,6 +1,5 @@
 // Public surface of the microfoom generic core (harness-agnostic). One curated
-// barrel (A2) — `export *` is banned (L3); re-exports are explicit. No Effect type
-// appears here (F6).
+// barrel (A2) — `export *` is banned (L3); re-exports are explicit.
 
 export const CORE_VERSION = "0.0.0";
 
@@ -67,7 +66,7 @@ export type { AgentResult, AgentTextStream } from "./result.js";
 // Parameter-schema derivation (ADR-0003)
 export type { DerivedParameters } from "./schema_derive.js";
 export { deriveMethodParameters, deriveProgramInput } from "./schema_derive.js";
-// Harness session contract (Effect-free; for harness authors)
+// Harness session contract (for harness authors)
 export type {
   HarnessSession,
   HarnessSessionOptions,

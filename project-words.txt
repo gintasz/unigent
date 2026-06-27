@@ -70,3 +70,4 @@ opencode
 oxc
 swc
 tsx
+asynchrony

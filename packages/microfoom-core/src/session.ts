@@ -3,7 +3,7 @@
 // them); core supplies the tool semantics (tools.ts) and this one thin
 // coordinator that both share — so there is no duplicated loop. This is the
 // Promise seam to an external agent (E1: foreign boundary); the pure domain
-// (config, usage, validation) stays Effect-free of this orchestration.
+// (config, usage, validation) stays clear of this orchestration.
 
 import type { ThinkingLevel } from "./config.js";
 
@@ -62,7 +62,7 @@ export interface SessionTurnResult {
 }
 
 /**
- * The PUBLIC, Effect-free harness contract (F6). A session runs one model turn:
+ * The PUBLIC harness contract (F6). A session runs one model turn:
  * it drives the model, executes the supplied tools (calling their `execute`), and
  * resolves when the turn settles (a tool signalled `terminate`, or the model
  * produced no tool call). Signal failures by throwing FoomtimeHarnessError

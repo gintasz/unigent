@@ -4,7 +4,7 @@
 // captures the value, foom_throw aborts with a code, foom_inspect returns a
 // parameter schema. Errors are repairable (returned as error tool-results so the
 // model corrects) or terminal (captured and thrown after the turn). Public errors
-// are used directly — this is the harness seam, past the Effect-internal core.
+// are used directly — this is the harness seam, past the internal core.
 
 import type { StandardSchemaV1 } from "@standard-schema/spec";
 import {
