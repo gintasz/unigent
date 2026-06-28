@@ -4,8 +4,8 @@ pre-commit:
   parallel: true
   commands:
     format:
-      glob: "*.{ts,js,json,md}"
-      run: pnpm exec biome check --write --error-on-warnings {staged_files}
+      glob: "*.{ts,js,json}"
+      run: pnpm exec biome check --write --error-on-warnings --no-errors-on-unmatched {staged_files}
       stage_fixed: true
     typecheck:
       run: pnpm run typecheck
