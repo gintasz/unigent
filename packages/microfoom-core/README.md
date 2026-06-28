@@ -15,7 +15,7 @@ the tools. The public surface is plain Promise/`throw` — no Effect type leaks 
 - **Parameter-schema derivation** — an exposed method's JSON Schema is derived from
   its TypeScript signature at load (`deriveMethodParameters`).
 - **Error taxonomy** — `FoomtimeError` and subclasses (`FoomtimeThrowError` with a
-  caller code, `FoomtimeValidationError`, cap/abort/harness errors).
+  caller code, `FoomtimeRepairExhaustedError` with a `channel`, cap/abort/harness errors).
 - **Harness port** — `HarnessSession` / `OpenSession` + neutral `NeutralToolDef`;
   what a harness implements. Run with `runProgram(ProgramClass, input, options)`.
 

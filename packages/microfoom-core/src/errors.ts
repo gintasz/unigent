@@ -4,23 +4,27 @@
 //
 //   FoomtimeError                      base for all of the below
 //   ├─ FoomtimeThrowError              deliberate `foom_throw` in a prompt; ALWAYS carries user `code`
-//   ├─ FoomtimeValidationError         repairable; catch-all for the three below (no `code`)
-//   │  ├─ FoomtimeArgError             bad `foom_call` args
-//   │  ├─ FoomtimeReturnError          bad/missing `foom_return`
-//   │  └─ FoomtimeDispatchError        unexposed/unknown method
 //   ├─ FoomtimeAbortError              run ended early
 //   │  ├─ FoomtimeTimeoutError         exceeded maxTurnDuration (turn) or maxProgramDuration (program)
 //   │  └─ FoomtimeCancelledError       aborted via signal / .abort()
 //   ├─ FoomtimeBudgetExceededError     exceeded maxBudgetUsd
 //   ├─ FoomtimeTokenLimitExceededError exceeded maxOutputTokens
 //   ├─ FoomtimeCallDepthError          exceeded maxCallDepth
-//   ├─ FoomtimeRepairExhaustedError    exceeded repairAttempts consecutive validation failures
+//   ├─ FoomtimeRepairExhaustedError    repair loop gave up; `.channel` names the fault
 //   ├─ FoomtimeHarnessError            boundary failure; split by retryability
 //   │  ├─ FoomtimeHarnessUnavailableError  transient — disconnect / 5xx / rate-limit (retryable)
 //   │  └─ FoomtimeHarnessRejectedError     non-transient — permission / model-not-allowed / overflow
 //   ├─ FoomtimeConfigError             bad config (no such model, invalid thinking, ...)
 //   ├─ FoomtimeInputError              /run input failed the program's input schema
+//   ├─ FoomtimeDispatchError           exposed method has no implementation on the instance (defect)
 //   └─ FoomtimeConcurrencyError        overlapping turns on one session (programming error)
+//
+// Repairable agent faults — bad `foom_call` args, a call to an unexposed method, a
+// `foom_return` whose value fails its schema, a turn that omits `foom_return` — are
+// NOT thrown when they happen. The runtime feeds each back to the model in-band as
+// an error tool-result and re-prompts, up to `repairAttempts` (E1/E3). They surface
+// as one exception only once repair is exhausted: FoomtimeRepairExhaustedError,
+// whose `.channel` ("args" | "return" | "dispatch") names the fault that exhausted.
 
 /** Options accepted by every Foomtime error: an underlying cause and free-form data. */
 export interface FoomtimeErrorOptions {
@@ -42,7 +46,7 @@ export class FoomtimeError extends Error {
  * Raised ONLY by a deliberate `foom_throw` in a prompt. ALWAYS carries the
  * user-defined `code` from `foom_throw` (the caller's namespace, e.g. "123" /
  * "E_TOO_LOW"); it has no runtime meaning. Runtime-caught failures are
- * FoomtimeValidationError, NOT this — they have no `code`.
+ * FoomtimeRepairExhaustedError, NOT this — they have no `code`.
  */
 export class FoomtimeThrowError extends FoomtimeError {
   readonly code: string;
@@ -51,19 +55,6 @@ export class FoomtimeThrowError extends FoomtimeError {
     this.code = code;
   }
 }
-
-/**
- * Repairable failure — the runtime rejected what the agent produced. Base for the
- * three below, so `instanceof FoomtimeValidationError` catches all of them. No
- * `code`; inspect `message` / `data`. All three count toward repairAttempts.
- */
-export class FoomtimeValidationError extends FoomtimeError {}
-/** Bad `foom_call` args. */
-export class FoomtimeArgError extends FoomtimeValidationError {}
-/** Bad or missing `foom_return`. */
-export class FoomtimeReturnError extends FoomtimeValidationError {}
-/** Unexposed or unknown method. */
-export class FoomtimeDispatchError extends FoomtimeValidationError {}
 
 /** Run ended early. */
 export class FoomtimeAbortError extends FoomtimeError {}
@@ -78,8 +69,21 @@ export class FoomtimeBudgetExceededError extends FoomtimeError {}
 export class FoomtimeTokenLimitExceededError extends FoomtimeError {}
 /** Exceeded maxCallDepth. */
 export class FoomtimeCallDepthError extends FoomtimeError {}
-/** Exceeded repairAttempts consecutive validation failures. */
-export class FoomtimeRepairExhaustedError extends FoomtimeError {}
+/** Which repairable agent fault exhausted the repair loop. */
+export type RepairChannel = "args" | "return" | "dispatch";
+/**
+ * The repair loop gave up after `repairAttempts` consecutive invalid attempts.
+ * `channel` names the fault: "args" (bad `foom_call` arguments), "return" (a
+ * `foom_return` value that failed its schema, or a turn that never returned), or
+ * "dispatch" (a call to an unexposed method).
+ */
+export class FoomtimeRepairExhaustedError extends FoomtimeError {
+  readonly channel: RepairChannel;
+  constructor(message: string, channel: RepairChannel, options?: FoomtimeErrorOptions) {
+    super(message, options);
+    this.channel = channel;
+  }
+}
 
 /**
  * The harness (or its backend) failed to fulfill a turn. foomtime runs inside the
@@ -107,5 +111,12 @@ export class FoomtimeHarnessRejectedError extends FoomtimeHarnessError {
 export class FoomtimeConfigError extends FoomtimeError {}
 /** /run input failed the program's input schema. */
 export class FoomtimeInputError extends FoomtimeError {}
+/**
+ * An exposed method has no callable implementation on the program instance —
+ * contradictory program state (a defect), not an agent-repairable miss, so it fails
+ * fast rather than entering the repair loop. A call to an *unexposed* method is
+ * repairable and is handled in-band (see the header note); it never reaches here.
+ */
+export class FoomtimeDispatchError extends FoomtimeError {}
 /** Overlapping turns on one session — a programming error, not repairable/retryable. */
 export class FoomtimeConcurrencyError extends FoomtimeError {}

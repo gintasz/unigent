@@ -7,13 +7,13 @@
 // are used directly — this is the harness seam, past the internal core.
 
 import type { StandardSchemaV1 } from "@standard-schema/spec";
+import type { RepairChannel } from "./errors.js";
 import {
   FoomtimeBudgetExceededError,
   FoomtimeCallDepthError,
   FoomtimeConfigError,
   FoomtimeError,
   FoomtimeRepairExhaustedError,
-  FoomtimeReturnError,
   FoomtimeThrowError,
   FoomtimeTimeoutError,
   FoomtimeTokenLimitExceededError,
@@ -120,11 +120,15 @@ function buildTurnTools(
   emitter: Emitter,
 ): NeutralToolDef[] {
   // Count a repairable miss; on exhaustion, capture a terminal error and stop.
-  const repairableThenMaybeStop = (content: string): ToolExecResult => {
+  // `channel` records which fault exhausted the loop (surfaced on the thrown error).
+  const repairableThenMaybeStop = (content: string, channel: RepairChannel): ToolExecResult => {
     repair.count += 1;
     emitter.emit?.({ type: "repair", span: emitter.span, attempt: repair.count });
     if (repair.count > repairAttempts) {
-      capture.fatal = new FoomtimeRepairExhaustedError("too many consecutive invalid attempts");
+      capture.fatal = new FoomtimeRepairExhaustedError(
+        "too many consecutive invalid attempts",
+        channel,
+      );
       capture.has = true;
       return stop(content);
     }
@@ -133,7 +137,7 @@ function buildTurnTools(
 
   const dispatch = async (method: string, args: unknown): Promise<ToolExecResult> => {
     if (!ctx.isExposed(method)) {
-      return repairableThenMaybeStop(TOOL_RESULTS.notExposed(method));
+      return repairableThenMaybeStop(TOOL_RESULTS.notExposed(method), "dispatch");
     }
     const issues = await ctx.validateArgs(method, args);
     if (issues !== undefined) {
@@ -145,7 +149,7 @@ function buildTurnTools(
         schema !== undefined
           ? `${formatIssues(issues)}. Expected schema: ${JSON.stringify(schema)}`
           : formatIssues(issues);
-      return repairableThenMaybeStop(TOOL_RESULTS.invalidArguments(detail));
+      return repairableThenMaybeStop(TOOL_RESULTS.invalidArguments(detail), "args");
     }
     emitter.emit?.({ type: "foom_call", span: emitter.span, method });
     try {
@@ -179,6 +183,7 @@ function buildTurnTools(
         if (typeof method !== "string")
           return repairableThenMaybeStop(
             TOOL_RESULTS.invalidArguments("`method` must be a string"),
+            "args",
           );
         return dispatch(method, field(args, "arguments") ?? {});
       },
@@ -194,8 +199,10 @@ function buildTurnTools(
         if (typeof method !== "string")
           return repairableThenMaybeStop(
             TOOL_RESULTS.invalidArguments("`method` must be a string"),
+            "args",
           );
-        if (!ctx.isExposed(method)) return repairableThenMaybeStop(TOOL_RESULTS.notExposed(method));
+        if (!ctx.isExposed(method))
+          return repairableThenMaybeStop(TOOL_RESULTS.notExposed(method), "dispatch");
         return ok(JSON.stringify(ctx.paramSchema(method) ?? { type: "object" }));
       },
     },
@@ -213,10 +220,14 @@ function buildTurnTools(
         if (typeof message !== "string") {
           return repairableThenMaybeStop(
             TOOL_RESULTS.invalidArguments("`message` must be a string"),
+            "args",
           );
         }
         if (code !== undefined && typeof code !== "string") {
-          return repairableThenMaybeStop(TOOL_RESULTS.invalidArguments("`code` must be a string"));
+          return repairableThenMaybeStop(
+            TOOL_RESULTS.invalidArguments("`code` must be a string"),
+            "args",
+          );
         }
         // `code` is optional: omitted → the default (`foom_throw` always carries one, F7).
         capture.thrown = { message, code: code ?? DEFAULT_THROW_CODE };
@@ -240,7 +251,10 @@ function buildTurnTools(
       execute: async (args) => {
         const result = await Promise.resolve(schema["~standard"].validate(field(args, "value")));
         if (result.issues !== undefined) {
-          return repairableThenMaybeStop(TOOL_RESULTS.invalidReturn(formatIssues(result.issues)));
+          return repairableThenMaybeStop(
+            TOOL_RESULTS.invalidReturn(formatIssues(result.issues)),
+            "return",
+          );
         }
         capture.value = result.value;
         capture.has = true;
@@ -438,10 +452,11 @@ export async function runProgramTurn(params: RunTurnParams): Promise<TurnOutcome
     }
 
     if (attempt >= params.caps.repairAttempts) {
-      throw new FoomtimeReturnError(
+      throw new FoomtimeRepairExhaustedError(
         params.mode.kind === "do"
           ? "the agent did not signal completion (no foom_return)"
           : "the agent produced no foom_return value",
+        "return",
       );
     }
     emitter.emit?.({ type: "repair", span: emitter.span, attempt: attempt + 1 });
