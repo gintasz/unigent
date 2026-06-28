@@ -1,0 +1,51 @@
+name: Docs
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Allow the workflow to publish to GitHub Pages.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deploy at a time; cancel superseded runs.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    # The docs site is a standalone package (its own lockfile, outside the pnpm
+    # workspace). TypeDoc reads the library source directly from the checkout.
+    defaults:
+      run:
+        working-directory: docs-website
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: docs-website/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile --ignore-workspace
+      # `prebuild` runs `gen:api` (TypeDoc → content/docs/api), then `next build`
+      # static-exports to `out/`.
+      - run: pnpm run build
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs-website/out
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

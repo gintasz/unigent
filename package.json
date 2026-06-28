@@ -32,11 +32,12 @@
     "dup": "jscpd packages",
     "api": "pnpm -r --if-present run api",
     "api:check": "pnpm -r --if-present run api:check",
+    "docs:check": "typedoc --emit none --treatWarningsAsErrors --tsconfig packages/microfoom-core/tsconfig.json --validation.invalidLink --validation.notExported packages/microfoom-core/src/index.ts packages/microfoom-core/src/trace/index.ts",
     "example": "node --import tsx examples/run.ts examples/hello.ts world",
     "cli": "node --import tsx packages/microfoom-cli/src/cli.ts",
     "link": "pnpm run build && pnpm config set global-bin-dir \"$(npm prefix -g)/bin\" && cd packages/microfoom-cli && pnpm link --global",
     "unlink": "cd packages/microfoom-cli && pnpm unlink --global",
-    "check": "pnpm run typecheck && pnpm run format:check && pnpm run lint && pnpm run arch && pnpm run ast && pnpm run spell && pnpm run deps:check && pnpm run dead && pnpm run dup && pnpm run build && pnpm run api:check && pnpm run test",
+    "check": "pnpm run typecheck && pnpm run format:check && pnpm run lint && pnpm run arch && pnpm run ast && pnpm run spell && pnpm run deps:check && pnpm run dead && pnpm run dup && pnpm run build && pnpm run api:check && pnpm run docs:check && pnpm run test",
     "prepare": "lefthook install"
   },
   "devDependencies": {
@@ -56,6 +57,7 @@
     "lefthook": "2.1.9",
     "syncpack": "15.3.2",
     "tsx": "4.22.4",
+    "typedoc": "0.28.19",
     "typescript": "5.9.3",
     "unplugin-swc": "1.5.9",
     "vitest": "4.1.8",

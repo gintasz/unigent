@@ -1,0 +1,18 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "plugin": ["typedoc-plugin-markdown", "typedoc-plugin-frontmatter"],
+  "entryPoints": ["../packages/microfoom-core/src/index.ts"],
+  "tsconfig": "../packages/microfoom-core/tsconfig.json",
+  "out": "content/docs/api",
+  "readme": "none",
+  "skipErrorChecking": true,
+  "githubPages": false,
+  "hidePageHeader": true,
+  "hideBreadcrumbs": true,
+  "useCodeBlocks": true,
+  "expandObjects": false,
+  "parametersFormat": "table",
+  "interfacePropertiesFormat": "table",
+  "indexFormat": "table",
+  "entryFileName": "index"
+}

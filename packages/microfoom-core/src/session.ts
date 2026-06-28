@@ -125,7 +125,7 @@ export interface HarnessSessionOptions {
    *  config at open — see AgentConfig.skills. */
   readonly skills?: readonly string[];
   /** Plugins ("extensions" in pi) to load this session. Same tri-state as
-   *  {@link skills}. */
+   *  {@link HarnessSessionOptions.skills}. */
   readonly plugins?: readonly string[];
 }
 

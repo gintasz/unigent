@@ -1,6 +1,19 @@
 // Public surface of the microfoom generic core (harness-agnostic). One curated
 // barrel (A2) — `export *` is banned (L3); re-exports are explicit.
 
+/**
+ * `@microfoom/core` — typed building blocks for coordination engineering: your
+ * TypeScript orchestrates and the model does only the fuzzy work.
+ *
+ * Write a program by extending {@link Program} and driving `this.agent`
+ * ({@link AgentRun}: `do` / `prose` / `value`); expose methods to the agent with
+ * {@link foom}; run it with {@link runProgram}. Failures surface as the
+ * {@link FoomtimeError} taxonomy.
+ *
+ * @packageDocumentation
+ */
+
+/** The version of `@microfoom/core` this build was published at. */
 export const CORE_VERSION = "0.0.0";
 
 // Config + options

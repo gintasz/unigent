@@ -1,6 +1,17 @@
 node_modules/
 dist/
 coverage/
+
+# Fumadocs docs site (docs-website/)
+docs-website/.next/
+docs-website/out/
+docs-website/.source/
+# TypeDoc-generated API reference (regenerated on every build)
+docs-website/content/docs/api/
+
+# Playwright MCP scratch (screenshots, snapshots, console logs)
+.playwright-mcp/
+
 .pnpm-store/
 .DS_Store
 **/etc/temp/

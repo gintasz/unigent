@@ -17,26 +17,19 @@ export type AgentClassDecorator = <T extends abstract new (...args: never[]) => 
 
 // @public
 export interface AgentConfig {
-    allowedTools?: readonly string[];
     harness?: string;
-    // (undocumented)
     maxBudgetUsd?: number;
-    // (undocumented)
     maxCallDepth?: number;
-    // (undocumented)
     maxOutputTokens?: number;
-    // (undocumented)
     maxTurnDuration?: Duration;
-    // (undocumented)
     model?: string;
-    // (undocumented)
+    plugins?: readonly string[];
     repairAttempts?: number;
-    // (undocumented)
     retries?: number;
-    // (undocumented)
+    skills?: readonly string[];
     systemPrompt?: SystemPrompt;
-    // (undocumented)
     thinking?: ThinkingLevel;
+    tools?: readonly string[];
 }
 
 // @public
@@ -52,6 +45,9 @@ export interface AgentDecorators {
     // (undocumented)
     readonly expose: AgentExposeDecorator;
 }
+
+// @public
+export type AgentDoTemplate = (strings: TemplateStringsArray, ...values: unknown[]) => AgentResult<void>;
 
 // @public
 export type AgentExposeDecorator = AgentMethodDecorator & ((options?: AgentExposeOptions) => AgentMethodDecorator);
@@ -81,6 +77,9 @@ export interface AgentProgramContext<TProgram extends object> extends AgentRun {
 }
 
 // @public
+export type AgentProseTemplate = (strings: TemplateStringsArray, ...values: unknown[]) => AgentTextStream;
+
+// @public
 export interface AgentResult<T> extends PromiseLike<T> {
     // (undocumented)
     abort(reason?: unknown): void;
@@ -90,9 +89,8 @@ export interface AgentResult<T> extends PromiseLike<T> {
 
 // @public
 export interface AgentRun {
-    // (undocumented)
-    readonly text: AgentTextTemplate;
-    // (undocumented)
+    readonly do: AgentDoTemplate;
+    readonly prose: AgentProseTemplate;
     readonly value: AgentValueTemplate;
 }
 
@@ -115,9 +113,6 @@ export interface AgentSession extends AgentRun {
 // @public
 export interface AgentTextStream extends AgentResult<string>, AsyncIterable<string> {
 }
-
-// @public
-export type AgentTextTemplate = (strings: TemplateStringsArray, ...values: unknown[]) => AgentTextStream;
 
 // @public
 export interface AgentToolOptions {
@@ -174,7 +169,7 @@ export const CONTROL_TOOLS: {
 // @public (undocumented)
 export type ControlToolName = (typeof CONTROL_TOOLS)[keyof typeof CONTROL_TOOLS];
 
-// @public (undocumented)
+// @public
 export const CORE_VERSION = "0.0.0";
 
 // @public
@@ -320,6 +315,8 @@ export interface HarnessSession {
 export interface HarnessSessionOptions {
     // (undocumented)
     readonly model: string;
+    readonly plugins?: readonly string[];
+    readonly skills?: readonly string[];
 }
 
 // @public
@@ -465,7 +462,5 @@ export interface UsageDelta {
     // (undocumented)
     readonly totalTokens: number;
 }
-
-// (No @packageDocumentation comment for this package)
 
 ```

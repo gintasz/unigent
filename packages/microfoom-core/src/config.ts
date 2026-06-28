@@ -23,6 +23,12 @@ export type SystemPrompt = { append: string } | { replace: string };
 /** Scoped agent configuration. Every field optional; absence means "inherit". */
 export interface AgentConfig {
   // --- override: closest scope wins ---
+  /**
+   * Model id the agent runs on, as `"provider/id"` (e.g.
+   * `"openrouter/deepseek/deepseek-v4-flash"`). Opaque to the core — the harness
+   * resolves it. No built-in default: a turn with no model in any scope is a
+   * {@link FoomtimeConfigError}.
+   */
   model?: string;
   /** Which registered harness runs this scope's agent turns. An opaque key into
    *  the run's harness registry (resolved at session-open), so the generic core
@@ -39,17 +45,41 @@ export interface AgentConfig {
    *  for stateless turns (each opens a fresh session). */
   skills?: readonly string[];
   /** The plugins the harness loads this scope (pi calls these "extensions"; opaque
-   *  names). Same tri-state + session timing as {@link skills}. */
+   *  names). Same tri-state + session timing as {@link AgentConfig.skills}. */
   plugins?: readonly string[];
+  /** Reasoning effort for the turn. One of the known {@link ThinkingLevel}s, or a
+   *  provider-specific raw string passed through untouched. Absent = inherit (and,
+   *  at the widest scope, whatever the harness/model defaults to). */
   thinking?: ThinkingLevel;
+  /** How many times the harness may retry a turn that fails with a *retryable*
+   *  harness error ({@link FoomtimeHarnessUnavailableError}). Absent = the harness's
+   *  own default. Does not apply to validation failures — those use
+   *  {@link AgentConfig.repairAttempts}. */
   retries?: number;
+  /** Consecutive validation failures tolerated before the turn gives up with
+   *  {@link FoomtimeRepairExhaustedError}. Each bad `foom_call`/`foom_return` is fed
+   *  back to the model as a repair hint and counts toward this budget.
+   *  @defaultValue `3` */
   repairAttempts?: number;
   // --- compose: append accumulates, replace resets ---
+  /** This scope's contribution to the system prompt. {@link SystemPrompt} is either
+   *  `{ append }` (accumulates onto wider scopes) or `{ replace }` (discards them
+   *  and becomes the new base). */
   systemPrompt?: SystemPrompt;
   // --- cap: tightens only, never loosens ---
+  /** Hard ceiling on run cost in USD; exceeding it aborts with
+   *  {@link FoomtimeBudgetExceededError}. Tighten-only across the cascade — a
+   *  narrower scope can lower it, never raise it. Absent = uncapped. */
   maxBudgetUsd?: number;
+  /** Hard ceiling on output tokens; exceeding it aborts with
+   *  {@link FoomtimeTokenLimitExceededError}. Tighten-only. Absent = uncapped. */
   maxOutputTokens?: number;
+  /** Maximum nesting depth of `foom_call` re-entry; exceeding it aborts with
+   *  {@link FoomtimeCallDepthError}. Tighten-only. Absent = uncapped. */
   maxCallDepth?: number;
+  /** Wall-clock ceiling on a single turn (a {@link Duration} like `"30s"`);
+   *  exceeding it aborts with {@link FoomtimeTimeoutError}. Tighten-only.
+   *  Absent = uncapped. */
   maxTurnDuration?: Duration;
 }
 

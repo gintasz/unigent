@@ -84,6 +84,11 @@ trackpad
 respawns
 respawn
 ellipsize
+streamable
+fumadocs
+gintasz
+prebuild
+predev
 Mtok
 ktok
 worktrees

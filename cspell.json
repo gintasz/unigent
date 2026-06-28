@@ -12,6 +12,7 @@
     "pnpm-lock.yaml",
     "**/*.api.md",
     "etc/**",
-    "docs/design/**"
+    "docs/design/**",
+    "docs-website/**"
   ]
 }

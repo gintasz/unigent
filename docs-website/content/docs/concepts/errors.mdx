@@ -1,0 +1,56 @@
+---
+title: Error taxonomy
+description: Every failure is a FoomtimeError subclass — discriminate with instanceof.
+---
+
+All failures surface at the Promise/exception boundary as subclasses of
+`FoomtimeError`. Catch the base to handle everything, or a specific subclass to
+react to one cause. Never parse an error message.
+
+```ts
+import {
+  FoomtimeError,
+  FoomtimeThrowError,
+  FoomtimeValidationError,
+  FoomtimeBudgetExceededError,
+} from "@microfoom/core";
+
+try {
+  const result = await runProgram(MyProgram, input, opts);
+} catch (err) {
+  if (err instanceof FoomtimeThrowError) {
+    // A deliberate foom_throw in a prompt — always carries `code`.
+    console.error(err.code, err.message);
+  } else if (err instanceof FoomtimeBudgetExceededError) {
+    // Hit maxBudgetUsd.
+  } else if (err instanceof FoomtimeValidationError) {
+    // The agent's output could not be repaired in time.
+  } else if (err instanceof FoomtimeError) {
+    // Anything else in the taxonomy.
+  }
+}
+```
+
+## The hierarchy
+
+```
+FoomtimeError
+├─ FoomtimeThrowError              deliberate foom_throw (always carries `code`)
+├─ FoomtimeValidationError         repairable; base for the three below
+│  ├─ FoomtimeArgError             bad foom_call args
+│  ├─ FoomtimeReturnError          bad/missing foom_return
+│  └─ FoomtimeDispatchError        unexposed/unknown method
+├─ FoomtimeAbortError              run ended early
+│  ├─ FoomtimeTimeoutError         exceeded maxTurnDuration / maxProgramDuration
+│  └─ FoomtimeCancelledError       aborted via signal / .abort()
+├─ FoomtimeBudgetExceededError     exceeded maxBudgetUsd
+├─ FoomtimeTokenLimitExceededError exceeded maxOutputTokens
+├─ FoomtimeCallDepthError          exceeded maxCallDepth
+├─ FoomtimeRepairExhaustedError    too many consecutive validation failures
+├─ FoomtimeHarnessError            harness/backend boundary failure
+│  ├─ FoomtimeHarnessUnavailableError  transient — retryable
+│  └─ FoomtimeHarnessRejectedError     non-transient
+├─ FoomtimeConfigError             bad config (no such model, invalid cap, …)
+├─ FoomtimeInputError              /run input failed the program's input schema
+└─ FoomtimeConcurrencyError        overlapping turns on one session
+```

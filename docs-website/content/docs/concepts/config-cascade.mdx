@@ -1,0 +1,37 @@
+---
+title: Config cascade
+description: How @foom.config scopes resolve from widest to narrowest.
+---
+
+Agent configuration cascades from the **widest** scope to the **narrowest**:
+
+```
+harness default  →  class (@foom.config)  →  method (@foom.config)  →  per-call (.with())
+```
+
+Each option kind merges by a fixed rule:
+
+- **Override** (most fields — `model`, `thinking`, `retries`, …): the nearest
+  scope wins.
+- **Caps** (`maxBudgetUsd`, `maxOutputTokens`, `maxCallDepth`, `maxTurnDuration`):
+  **tighten-only** — a narrower scope can lower a cap but never raise it.
+- **System prompt**: composes — `{ append }` accumulates onto wider scopes,
+  `{ replace }` discards them and becomes the new base.
+
+```ts
+@foom.config({ model: "openrouter/deepseek/deepseek-v4-flash", maxBudgetUsd: 1.0 })
+export default class extends Program(Input) {
+  async main() {
+    // Inherits the class model; tightens the budget for this one call.
+    await this.agent.with({ maxBudgetUsd: 0.2, thinking: "high" }).prose`…`;
+  }
+
+  @foom.config({ thinking: "low" }) // applies whenever this method runs a turn
+  @foom.expose
+  async cheapStep() { /* … */ }
+}
+```
+
+The merge is associative and total, so folding the chain in any grouping yields
+the same effective config. An unenforceable cap is rejected at engine setup
+through the typed error channel (`FoomtimeConfigError`).

@@ -168,7 +168,8 @@ export function App({
   const statusText =
     snapshot.status === "error" ? "● error" : snapshot.status === "done" ? "● done" : "● running";
   // Stamp the first time we see each span so an open span can report live elapsed.
-  for (const row of rows) if (!firstSeen.current.has(row.span)) firstSeen.current.set(row.span, now);
+  for (const row of rows)
+    if (!firstSeen.current.has(row.span)) firstSeen.current.set(row.span, now);
 
   // Contextual clock. With a span selected, the header reflects THAT span: its exact
   // duration once settled, or a live tick while it's still open. With nothing
@@ -298,7 +299,6 @@ function findNode(node: RunNode, span: string): RunNode | undefined {
   }
   return undefined;
 }
-
 
 function emptyMessage(status: "running" | "done" | "error", selected: string | undefined): string {
   if (selected !== undefined) return `no transcript for ${selected} (e.g. a pure method or scope)`;

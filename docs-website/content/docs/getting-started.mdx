@@ -1,0 +1,72 @@
+---
+title: Getting started
+description: Install microfoom, write a first program, and run it from the CLI or programmatically.
+---
+
+## Install
+
+microfoom is a TypeScript library. You need Node.js 24+ and a Standard Schema
+validator (zod 3.24+, valibot, arktype — any works).
+
+```sh
+pnpm add @microfoom/core @microfoom/pi-adapter zod
+```
+
+`@microfoom/core` is the harness-agnostic runtime. `@microfoom/pi-adapter` binds
+it to the [pi](https://github.com/earendil-works/pi) harness, which supplies the
+model loop, auth, and tools from your `~/.pi` config.
+
+## Write a program
+
+A program extends `Program(schema)` and implements `main`. Inside `main`, drive
+the agent through `this.agent`.
+
+```ts
+// my-program.ts
+import { foom, Program } from "@microfoom/core";
+import { z } from "zod";
+
+const Input = z.object({ topic: z.string() });
+
+@foom.config({ model: "openrouter/deepseek/deepseek-v4-flash" })
+export default class extends Program<typeof Input, number>(Input) {
+  async main(input: typeof Input._type): Promise<number> {
+    await this.agent.prose`Briefly explain ${input.topic}.`;
+    return await this.agent.value(z.number().int())`
+      Pick a number between 0 and 100, then foom_return it.`;
+  }
+}
+```
+
+## Run it
+
+### From the CLI
+
+The CLI runs a program file and prints the result to stdout (trace goes to
+stderr):
+
+```sh
+microfoom run ./my-program.ts '{"topic":"tides"}'
+```
+
+### Programmatically
+
+```ts
+import { runProgram } from "@microfoom/core";
+import { createPiOpenSession } from "@microfoom/pi-adapter";
+import MyProgram from "./my-program.ts";
+
+const result = await runProgram(MyProgram, { topic: "tides" }, {
+  harnesses: { pi: createPiOpenSession() }, // named harness ports; sole entry is the default
+  model: "openrouter/deepseek/deepseek-v4-flash",
+  sourceFile: "./my-program.ts", // enables foom_call parameter derivation
+});
+
+console.log(result); // a number
+```
+
+## Where to go next
+
+- [The 4 control operations](/docs/concepts/control-operations) — the agent's only way to affect your program.
+- [Exposing methods](/docs/concepts/exposing-methods) — the three exposure tiers.
+- [Config cascade](/docs/concepts/config-cascade) — how `@foom.config` scopes resolve.

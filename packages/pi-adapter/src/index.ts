@@ -248,13 +248,6 @@ function composeSystemPrompt(base: string | undefined, programPrompt: string): s
   return base !== undefined && base.length > 0 ? `${base}\n\n${programPrompt}` : programPrompt;
 }
 
-/**
- * Build an OpenSession backed by pi. Resolves models + auth from ~/.pi and obtains
- * pi's configured stream function from `createAgentSession` (done once, lazily).
- * Each microfoom turn drives a pi `Agent` whose loop runs the FOOM tools; a
- * `session()` reuses one Agent (continued transcript), a stateless turn opens a
- * fresh one. Pass the result to runProgram's `openSession`.
- */
 /** A plugin's stable identifier for `allowedPlugins` matching: pi's source name,
  *  falling back to the extension file's basename. */
 function pluginName(ext: Extension): string {
@@ -314,6 +307,24 @@ function runtimeKey(
   return `${ser(allowedSkills)}|${ser(allowedPlugins)}`;
 }
 
+/**
+ * Build an `OpenSession` backed by pi — the harness port you hand to
+ * `runProgram`. Resolves models + auth from `~/.pi` and obtains pi's configured
+ * stream function from `createAgentSession` (done once, lazily). Each microfoom
+ * turn drives a pi `Agent` whose loop runs the FOOM tools; a `session()` reuses one
+ * Agent (continued transcript), a stateless turn opens a fresh one.
+ *
+ * @param options - Overrides for testing or custom wiring; see {@link PiSessionOptions}.
+ *   Defaults resolve from `~/.pi`.
+ * @returns An `OpenSession` to register under a name in `runProgram`'s `harnesses`.
+ * @example
+ * ```ts
+ * const result = await runProgram(MyProgram, input, {
+ *   harnesses: { pi: createPiOpenSession() },
+ *   model: "openrouter/deepseek/deepseek-v4-flash",
+ * });
+ * ```
+ */
 export function createPiOpenSession(options: PiSessionOptions = {}): OpenSession {
   const logFile = options.logFile ?? process.env.MICROFOOM_LOG;
 

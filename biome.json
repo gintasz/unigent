@@ -3,7 +3,15 @@
   "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
   "files": {
     "ignoreUnknown": true,
-    "includes": ["**", "!**/dist", "!**/node_modules", "!docs/design", "!**/*.api.md", "!etc"]
+    "includes": [
+      "**",
+      "!**/dist",
+      "!**/node_modules",
+      "!docs/design",
+      "!**/*.api.md",
+      "!etc",
+      "!docs-website"
+    ]
   },
   "formatter": {
     "enabled": true,

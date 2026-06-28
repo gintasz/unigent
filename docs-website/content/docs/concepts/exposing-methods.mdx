@@ -1,0 +1,39 @@
+---
+title: Exposing methods
+description: Methods are unreachable by the agent until @foom.expose — at one of three context-cost tiers.
+---
+
+Capability security is the default. A method on your program class is **not**
+callable by the agent until you opt it in with `@foom.expose`. A language-private
+(`#`) member can never be exposed.
+
+Exposure comes in three tiers, trading context cost against discoverability:
+
+| Tier | Syntax | What the model sees |
+| --- | --- | --- |
+| **Silent** | `@foom.expose` | Nothing up front — the agent must discover the method with `foom_inspect`. Cheapest. |
+| **Announced** | `@foom.expose({ announcement: "…" })` | A one-line mention in the system prompt, so the agent knows it exists. |
+| **Tool** | `@foom.expose({ tool: { description: "…" } })` | A full native tool with its parameter schema derived from the TypeScript signature. |
+
+```ts
+// Silent — callable, but the agent learns the signature via foom_inspect.
+@foom.expose
+async randomInt(min: number, max: number): Promise<number> {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+// Announced — the agent is told the method exists.
+@foom.expose({ announcement: "Generates a random integer in [min, max]." })
+async randomInt2(min: number, max: number): Promise<number> { /* … */ }
+
+// Tool — full native tool, parameters derived from the signature.
+@foom.expose({ tool: { description: "Fetch the current price of a ticker." } })
+async price(ticker: string): Promise<number> { /* … */ }
+```
+
+## Parameter derivation
+
+For the `{ tool }` tier — and for `foom_inspect` — microfoom reads your method's
+TypeScript parameter types directly from source and emits a JSON Schema. You never
+hand-write a `parameters` block. This requires `sourceFile` to be passed to
+`runProgram` (the CLI sets it for you).

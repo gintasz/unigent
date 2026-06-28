@@ -23,10 +23,39 @@ export type AgentMethodDecorator = <This, Args extends readonly unknown[], Retur
 /** Usable on either a class or a method. */
 export type AgentDecorator = AgentClassDecorator & AgentMethodDecorator;
 
-/** `@foom.config(options)` — class/method config decorator. */
+/**
+ * `@foom.config(options)` — set agent config on a class or a method. On a class
+ * it is the widest scope of the cascade ({@link AgentConfig}); on a method it
+ * applies whenever that method's body runs an agent turn. Narrower scopes win.
+ *
+ * @example
+ * ```ts
+ * @foom.config({ model: "openrouter/deepseek/deepseek-v4-flash", thinking: "medium" })
+ * export default class extends Program<typeof Input, number>(Input) {
+ *   async main(input: typeof Input._type): Promise<number> { ... }
+ * }
+ * ```
+ */
 export type AgentConfigDecorator = (options: AgentOptions) => AgentDecorator;
 
-/** `@foom.expose` (bare) or `@foom.expose(options)`. */
+/**
+ * `@foom.expose` (bare) or `@foom.expose(options)` — make a method agent-callable
+ * via `foom_call`. Methods are unreachable by default (F3). Three tiers by context
+ * cost (see {@link AgentExposeOptions}): bare = silent, `{ announcement }` = named
+ * in the prompt, `{ tool }` = full native tool. Private (`#`) members can never be
+ * exposed.
+ *
+ * @example
+ * ```ts
+ * // Silent: callable, but the agent must discover it via foom_inspect.
+ * @foom.expose
+ * async randomInt(min: number, max: number): Promise<number> { ... }
+ *
+ * // Announced: the agent is told the method exists.
+ * @foom.expose({ announcement: "Generates a random integer in [min, max]." })
+ * async randomInt(min: number, max: number): Promise<number> { ... }
+ * ```
+ */
 export type AgentExposeDecorator = AgentMethodDecorator &
   ((options?: AgentExposeOptions) => AgentMethodDecorator);
 
@@ -123,7 +152,27 @@ function expose(
   return decorate as unknown as AgentMethodDecorator;
 }
 
-/** Decorators live under a module-level `foom` namespace (@foom.config / @foom.expose). */
+/**
+ * The microfoom decorator namespace. {@link AgentConfigDecorator | `foom.config`}
+ * sets agent config on a class or method; {@link AgentExposeDecorator | `foom.expose`}
+ * makes a method agent-callable. Both run at class-definition time and only record
+ * metadata — they never run prompts.
+ *
+ * @example
+ * ```ts
+ * @foom.config({ model: "openrouter/deepseek/deepseek-v4-flash" })
+ * export default class extends Program(Input) {
+ *   async main() {
+ *     return await this.agent.value(z.number())`Pick a number. foom_return it.`;
+ *   }
+ *
+ *   @foom.expose({ announcement: "Generates a random integer in [min, max]." })
+ *   async randomInt(min: number, max: number) {
+ *     return Math.floor(Math.random() * (max - min + 1)) + min;
+ *   }
+ * }
+ * ```
+ */
 export const foom: AgentDecorators = {
   config: ((options: AgentOptions) => makeConfig(options)) as AgentConfigDecorator,
   expose: expose as unknown as AgentExposeDecorator,

@@ -1,0 +1,45 @@
+---
+title: The 4 control operations
+description: The agent affects your program only through four structured control tools.
+---
+
+The agent, invoked via microfoom, communicates with your program **only** through
+function-calling — never by string-matching its prose. There are exactly four
+control operations, exposed to the model as native tools:
+
+| Tool | Effect |
+| --- | --- |
+| `foom_call(method_name, args_object)` | Invoke an exposed method in your program. |
+| `foom_return(args_object)` | Return a structured value (validated against your schema). |
+| `foom_throw(message, code)` | Abort execution with an error. |
+| `foom_inspect(method_name)` | Read an exposed method's parameter schema. |
+
+Because the boundary is structured, your program never parses free text to decide
+what the agent "meant". A turn ends when the agent calls `foom_return` (or
+`foom_throw`); the runtime validates the payload and either resolves your
+`await` or feeds back a repair hint.
+
+## Turn modes
+
+`this.agent` exposes three output modes over these operations:
+
+- **`this.agent.do`** — an act turn. Run instructions for their side effects;
+  resolves to `void`. The cheapest mode (no schema, no final message).
+- **`this.agent.prose`** — freeform natural-language text, streamable with
+  `for await`.
+- **`this.agent.value(schema)`** — a schema-validated structured result via
+  `foom_return`. The awaited value is typed as the schema's output.
+
+```ts
+// act — fix something, return nothing
+await this.agent.do`Read the failing test and fix the bug it covers.`;
+
+// prose — stream an explanation
+for await (const chunk of this.agent.prose`Summarize the diff.`) {
+  process.stdout.write(chunk);
+}
+
+// value — typed, validated result
+const score = await this.agent.value(z.number().min(0).max(1))`
+  Rate the summary's faithfulness from 0 to 1. foom_return it.`;
+```

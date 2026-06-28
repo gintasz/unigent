@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="microfoom">
+  <title>microfoom</title>
+  <rect width="32" height="32" rx="7" fill="#6366f1"/>
+  <path d="M12 24V9.5A2.5 2.5 0 0 1 14.5 7H21v3.2h-5.6v4.1H20v3.2h-4.6V24z" fill="#fff"/>
+</svg>

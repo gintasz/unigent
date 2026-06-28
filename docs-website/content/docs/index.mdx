@@ -1,0 +1,45 @@
+---
+title: Introduction
+description: Typed building blocks for agentic coordination engineering — your TypeScript orchestrates, the model does only the fuzzy work.
+---
+
+A TypeScript runtime for **coordination engineering**. You write ordinary
+TypeScript — control flow, recursion, parallelism, arithmetic — and call the
+agent only for the genuinely non-deterministic parts. The agent affects your
+program **only** through four structured control tools, never by string-matching
+its prose.
+
+```ts
+import { foom, Program } from "@microfoom/core";
+import { z } from "zod"; // any Standard Schema validator
+
+const Input = z.object({ topic: z.string() });
+
+@foom.config({ model: "openrouter/deepseek/deepseek-v4-flash", thinking: "medium" })
+export default class extends Program<typeof Input, number>(Input) {
+  async main(input: typeof Input._type): Promise<number> {
+    // Prose channel — conversational text.
+    await this.agent.prose`Briefly explain ${input.topic}.`;
+
+    // Structured channel — schema-validated value via `foom_return`.
+    return await this.agent.value(z.number().int())`
+      Pick a number between 0 and 100. foom_return it.
+    `;
+  }
+
+  // Methods are unreachable by the agent until @foom.expose (capability security).
+  @foom.expose({ announcement: "Generates a random integer in [min, max]." })
+  async randomInt(min: number, max: number): Promise<number> {
+    return Math.floor(Math.random() * (max - min + 1)) + min;
+  }
+}
+```
+
+## Next steps
+
+<Cards>
+  <Card title="Getting started" href="/docs/getting-started" description="Install microfoom and run your first program." />
+  <Card title="The 4 control operations" href="/docs/concepts/control-operations" description="How the agent talks to your code." />
+  <Card title="Exposing methods" href="/docs/concepts/exposing-methods" description="The three capability-security tiers." />
+  <Card title="Error taxonomy" href="/docs/concepts/errors" description="Discriminate failures with instanceof." />
+</Cards>

@@ -37,13 +37,31 @@ import {
   type UsageAccount,
 } from "./usage.js";
 
-/** A streaming prose turn from a template literal — freeform natural language. */
+/**
+ * A streaming prose turn from a template literal — freeform natural language.
+ * Awaiting yields the full message; `for await` streams chunks.
+ *
+ * @example
+ * ```ts
+ * await this.agent.prose`Briefly explain ${topic}.`;
+ * ```
+ */
 export type AgentProseTemplate = (
   strings: TemplateStringsArray,
   ...values: unknown[]
 ) => AgentTextStream;
 
-/** A structured-value turn: pick a schema, then a template literal. */
+/**
+ * A structured-value turn: pass a Standard Schema, then tag a template literal.
+ * The agent must `foom_return` a value; it is validated against the schema and the
+ * awaited result is typed as the schema's output.
+ *
+ * @example
+ * ```ts
+ * const n = await this.agent.value(z.number().int())`
+ *   Pick a number between 0 and 100, then foom_return it.`;
+ * ```
+ */
 export type AgentValueTemplate = <S extends StandardSchemaV1>(
   schema: S,
 ) => (
@@ -51,8 +69,15 @@ export type AgentValueTemplate = <S extends StandardSchemaV1>(
   ...values: unknown[]
 ) => AgentResult<StandardSchemaV1.InferOutput<S>>;
 
-/** An act turn — do the work (via tools), return nothing. The cheap default for
- *  instructions whose payload you don't need (no schema, no final prose). */
+/**
+ * An act turn — do the work (via tools), return nothing. The cheap default for
+ * instructions whose payload you don't need (no schema, no final prose).
+ *
+ * @example
+ * ```ts
+ * await this.agent.do`Read the failing test and fix the bug it covers.`;
+ * ```
+ */
 export type AgentDoTemplate = (
   strings: TemplateStringsArray,
   ...values: unknown[]
@@ -60,8 +85,14 @@ export type AgentDoTemplate = (
 
 /** The output modes available wherever prompts run: act (`do`), `prose`, `value`. */
 export interface AgentRun {
+  /** Act turn: run instructions for their side effects, resolve to `void`. The
+   *  cheapest mode — no schema, no final message. See {@link AgentDoTemplate}. */
   readonly do: AgentDoTemplate;
+  /** Prose turn: freeform natural-language text, streamable. See
+   *  {@link AgentProseTemplate}. */
   readonly prose: AgentProseTemplate;
+  /** Value turn: schema-validated structured result via `foom_return`. See
+   *  {@link AgentValueTemplate}. */
   readonly value: AgentValueTemplate;
 }
 
@@ -130,6 +161,21 @@ export abstract class FoomtimeProgram<I = string[], R = unknown> {
  * Name an input schema, then `extends Program(Input)`; `main(input)` is typed from
  * it. The return type is taken from your `main` (inferred by `runProgram`), so the
  * common case needs no type arguments at all — just `extends Program(schema)`.
+ *
+ * @param input - A Standard Schema validating the program's `/run` input. `main`'s
+ *   parameter is typed as this schema's output.
+ * @returns An abstract base class to extend; implement `async main(input)`.
+ * @example
+ * ```ts
+ * const Input = z.object({ topic: z.string() });
+ *
+ * @foom.config({ model: "openrouter/deepseek/deepseek-v4-flash" })
+ * export default class extends Program<typeof Input, number>(Input) {
+ *   async main(input: typeof Input._type): Promise<number> {
+ *     return await this.agent.value(z.number().int())`Pick a number for ${input.topic}.`;
+ *   }
+ * }
+ * ```
  */
 export function Program<S extends StandardSchemaV1, R = unknown>(
   input: S,
@@ -790,6 +836,28 @@ function makeContext<P extends object>(
  * Construct, wire `this.agent`, and run a program to its result (the facade). The
  * result type is inferred from the program's `main` return, so callers need not
  * (and the class need not) declare it.
+ *
+ * @param ProgramClass - A class extending `Program(schema)` (or `FoomtimeProgram`).
+ * @param rawInput - Input for the program; validated against the class's input
+ *   schema before `main` runs.
+ * @param options - Harness registry, model, and source — see {@link RunProgramOptions}.
+ * @returns The value `main` resolves to.
+ * @throws {@link FoomtimeInputError} when `rawInput` fails the input schema.
+ * @throws {@link FoomtimeConfigError} on bad config (e.g. no model, unknown harness).
+ * @throws {@link FoomtimeValidationError} when the agent's output can't be repaired,
+ *   {@link FoomtimeThrowError} on a deliberate `foom_throw`, and other
+ *   {@link FoomtimeError} subclasses on caps/aborts/harness failures (F7).
+ * @example
+ * ```ts
+ * import { runProgram } from "@microfoom/core";
+ * import { createPiOpenSession } from "@microfoom/pi-adapter";
+ *
+ * const result = await runProgram(MyProgram, { topic: "tides" }, {
+ *   harnesses: { pi: createPiOpenSession() },
+ *   model: "openrouter/deepseek/deepseek-v4-flash",
+ *   sourceFile: "./my-program.ts",
+ * });
+ * ```
  */
 export async function runProgram<P extends FoomtimeProgram<never, unknown>>(
   ProgramClass: abstract new () => P,
