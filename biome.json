@@ -53,6 +53,9 @@
       "includes": ["packages/*/test/**", "examples/**"],
       "linter": {
         "rules": {
+          "complexity": {
+            "noExcessiveCognitiveComplexity": "off"
+          },
           "nursery": {
             "noFloatingPromises": "off"
           }

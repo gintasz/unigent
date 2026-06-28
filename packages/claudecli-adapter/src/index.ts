@@ -23,9 +23,14 @@ import {
   type SessionTurnResult,
 } from "@microfoom/core";
 import { startMcpServer } from "./mcp.js";
-import { type ClaudeProcessFactory, type ClaudeSpec, spawnClaude } from "./process.js";
+import {
+  type ClaudeProcess,
+  type ClaudeProcessFactory,
+  type ClaudeSpec,
+  spawnClaude,
+} from "./process.js";
 import { applyRename } from "./rename.js";
-import { createTurnReader } from "./stream.js";
+import { createTurnReader, type TurnReader } from "./stream.js";
 
 // The subprocess seam is public: a caller can inject a custom launcher (tests,
 // sandboxing, a different binary path) via ClaudeCliSessionOptions.processFactory.
@@ -62,6 +67,81 @@ function composeSystemPrompt(programPrompt: string): string {
 }
 
 /**
+ * Reconcile core's bare FOOM tool names with the prefixed `mcp__<server>__<name>`
+ * the model actually sees: rewrite every reference (tool descriptions, system
+ * prompt, prompt) so the two agree. Each tool's `.name` stays canonical for MCP
+ * routing.
+ */
+function renameForModel(
+  request: SessionTurnRequest,
+  serverName: string,
+): { names: string[]; renamedTools: NeutralToolDef[]; systemPrompt: string; prompt: string } {
+  const names = request.tools.map((tool) => tool.name);
+  const renamedTools: NeutralToolDef[] = request.tools.map((tool) => ({
+    ...tool,
+    description: applyRename(tool.description, names, serverName),
+  }));
+  return {
+    names,
+    renamedTools,
+    systemPrompt: applyRename(composeSystemPrompt(request.systemPrompt), names, serverName),
+    prompt: applyRename(request.prompt, names, serverName),
+  };
+}
+
+/**
+ * Resolve the Claude session argv for this turn: a fresh session pins a new id; a
+ * continued session resumes the current id; a fork's first turn resumes the seed
+ * id AND branches from it.
+ */
+function resolveSessionArgs(
+  currentSessionId: string | undefined,
+  seedSessionId: string | undefined,
+): { newId: string | undefined; resumeSessionId: string | undefined; fork: boolean } {
+  const fresh = currentSessionId === undefined && seedSessionId === undefined;
+  return {
+    newId: fresh ? randomUUID() : undefined,
+    resumeSessionId: currentSessionId ?? seedSessionId,
+    fork: currentSessionId === undefined && seedSessionId !== undefined,
+  };
+}
+
+/** Drain the subprocess's JSONL stdout into the reader, tolerating non-JSON noise. */
+async function drainTurnStream(proc: ClaudeProcess, reader: TurnReader): Promise<void> {
+  for await (const line of proc.lines) {
+    const trimmed = line.trim();
+    if (trimmed === "") continue;
+    let event: Record<string, unknown>;
+    try {
+      event = JSON.parse(trimmed) as Record<string, unknown>;
+    } catch {
+      continue; // tolerate any non-JSON noise on the stream
+    }
+    reader.handle(event);
+  }
+}
+
+/**
+ * Validate the drained turn and produce its result, mapping a reported harness
+ * failure or a missing `result` event to the right typed error.
+ */
+function resolveTurnResult(reader: TurnReader, proc: ClaudeProcess): SessionTurnResult {
+  const failure = reader.error();
+  if (failure !== undefined) {
+    throw failure.retryable
+      ? new FoomtimeHarnessUnavailableError(failure.message)
+      : new FoomtimeHarnessRejectedError(failure.message);
+  }
+  if (!reader.resultSeen()) {
+    const detail = proc.stderr().trim();
+    throw new FoomtimeHarnessUnavailableError(
+      detail.length > 0 ? detail : "claude produced no result",
+    );
+  }
+  return { assistantText: reader.assistantText(), usage: reader.usage() };
+}
+
+/**
  * Build an OpenSession backed by the `claude` CLI. Pass the result to runProgram's
  * `harnesses`. Models resolve through Claude Code itself (`--model`); auth comes
  * from the user's logged-in CLI.
@@ -83,28 +163,12 @@ export function createClaudeCliOpenSession(options: ClaudeCliSessionOptions = {}
       let currentSessionId: string | undefined;
 
       const runTurn = async (request: SessionTurnRequest): Promise<SessionTurnResult> => {
-        const names = request.tools.map((tool) => tool.name);
-
-        // Reconcile the prefix: core's tool descriptions + prompts reference bare
-        // FOOM names, but the model only ever sees `mcp__<server>__<name>`. Rewrite
-        // every reference so the two agree. Tool .name stays canonical (MCP routing).
-        const renamedTools: NeutralToolDef[] = request.tools.map((tool) => ({
-          ...tool,
-          description: applyRename(tool.description, names, serverName),
-        }));
-        const systemPrompt = applyRename(
-          composeSystemPrompt(request.systemPrompt),
-          names,
-          serverName,
-        );
-        const prompt = applyRename(request.prompt, names, serverName);
-
+        const { names, renamedTools, systemPrompt, prompt } = renameForModel(request, serverName);
         const server = await startMcpServer(renamedTools, serverName);
-
-        // Session argv: fresh (pin a new id), continue (resume current), or the
-        // fork's first turn (resume the seed AND branch).
-        const fresh = currentSessionId === undefined && seedSessionId === undefined;
-        const newId = fresh ? randomUUID() : undefined;
+        const { newId, resumeSessionId, fork } = resolveSessionArgs(
+          currentSessionId,
+          seedSessionId,
+        );
         const spec: ClaudeSpec = {
           model: modelId,
           systemPrompt,
@@ -116,8 +180,8 @@ export function createClaudeCliOpenSession(options: ClaudeCliSessionOptions = {}
           effort: request.thinking,
           appendSystemPrompt,
           sessionId: newId,
-          resumeSessionId: currentSessionId ?? seedSessionId,
-          fork: currentSessionId === undefined && seedSessionId !== undefined,
+          resumeSessionId,
+          fork,
           extraArgs: options.extraArgs,
           signal: request.signal,
         };
@@ -125,36 +189,14 @@ export function createClaudeCliOpenSession(options: ClaudeCliSessionOptions = {}
         const reader = createTurnReader(serverName, request.onEvent);
         const proc = factory(spec);
         try {
-          for await (const line of proc.lines) {
-            const trimmed = line.trim();
-            if (trimmed === "") continue;
-            let event: Record<string, unknown>;
-            try {
-              event = JSON.parse(trimmed) as Record<string, unknown>;
-            } catch {
-              continue; // tolerate any non-JSON noise on the stream
-            }
-            reader.handle(event);
-          }
+          await drainTurnStream(proc, reader);
         } finally {
           await server.close();
         }
 
-        const failure = reader.error();
-        if (failure !== undefined) {
-          throw failure.retryable
-            ? new FoomtimeHarnessUnavailableError(failure.message)
-            : new FoomtimeHarnessRejectedError(failure.message);
-        }
-        if (!reader.resultSeen()) {
-          const detail = proc.stderr().trim();
-          throw new FoomtimeHarnessUnavailableError(
-            detail.length > 0 ? detail : "claude produced no result",
-          );
-        }
-
+        const result = resolveTurnResult(reader, proc);
         currentSessionId = reader.sessionId() ?? newId ?? currentSessionId;
-        return { assistantText: reader.assistantText(), usage: reader.usage() };
+        return result;
       };
 
       return {

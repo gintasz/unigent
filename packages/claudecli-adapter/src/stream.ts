@@ -80,10 +80,11 @@ export function createTurnReader(
     if (onEvent !== undefined) onEvent(event);
   };
 
-  const handleAssistant = (message: StreamJson): void => {
-    emit({ type: "message_start" });
+  // Emit one assistant message's content blocks (text deltas + tool calls) and
+  // return the concatenated prose text.
+  const emitAssistantContent = (content: unknown): string => {
     let text = "";
-    for (const raw of asArray(message.content)) {
+    for (const raw of asArray(content)) {
       const block = asObject(raw);
       if (block === undefined) continue;
       if (block.type === "text") {
@@ -99,6 +100,12 @@ export function createTurnReader(
         });
       }
     }
+    return text;
+  };
+
+  const handleAssistant = (message: StreamJson): void => {
+    emit({ type: "message_start" });
+    const text = emitAssistantContent(message.content);
     emit({ type: "message_end" });
     if (text.length > 0) lastAssistantText = text;
   };
@@ -119,6 +126,29 @@ export function createTurnReader(
     }
   };
 
+  // A non-"allowed" rate-limit status fails the turn as retryable.
+  const handleRateLimit = (event: StreamJson): void => {
+    const status = asString(asObject(event.rate_limit_info)?.status);
+    if (status !== undefined && status !== "allowed") {
+      error = { message: `rate limited: ${status}`, retryable: true };
+    }
+  };
+
+  // The terminal `result` event: capture usage/cost + final text, and surface a
+  // model-side failure (is_error or a non-success subtype) as a retryable error.
+  const handleResult = (event: StreamJson): void => {
+    resultSeen = true;
+    const cost = typeof event.total_cost_usd === "number" ? event.total_cost_usd : undefined;
+    usage = usageFromResult(event.usage, cost);
+    finalText = asString(event.result) ?? "";
+    if (event.is_error === true || (asString(event.subtype) ?? "success") !== "success") {
+      error = {
+        message: finalText.length > 0 ? finalText : (asString(event.subtype) ?? "model error"),
+        retryable: true,
+      };
+    }
+  };
+
   const handle = (event: StreamJson): void => {
     const sid = asString(event.session_id);
     if (sid !== undefined) sessionId = sid;
@@ -134,26 +164,12 @@ export function createTurnReader(
         if (message !== undefined) handleUser(message);
         break;
       }
-      case "rate_limit_event": {
-        const status = asString(asObject(event.rate_limit_info)?.status);
-        if (status !== undefined && status !== "allowed") {
-          error = { message: `rate limited: ${status}`, retryable: true };
-        }
+      case "rate_limit_event":
+        handleRateLimit(event);
         break;
-      }
-      case "result": {
-        resultSeen = true;
-        const cost = typeof event.total_cost_usd === "number" ? event.total_cost_usd : undefined;
-        usage = usageFromResult(event.usage, cost);
-        finalText = asString(event.result) ?? "";
-        if (event.is_error === true || (asString(event.subtype) ?? "success") !== "success") {
-          error = {
-            message: finalText.length > 0 ? finalText : (asString(event.subtype) ?? "model error"),
-            retryable: true,
-          };
-        }
+      case "result":
+        handleResult(event);
         break;
-      }
       default:
         break;
     }

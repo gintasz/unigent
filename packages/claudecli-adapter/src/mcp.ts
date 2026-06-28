@@ -66,6 +66,31 @@ export function createMcpHandler(
     inputSchema: tool.parameters,
   }));
 
+  // Dispatch a `tools/call`: look up the tool, run it, and map its result (or an
+  // unknown-tool error) back to a JSON-RPC response. Flips the terminate latch.
+  const callTool = async (request: JsonRpcRequest): Promise<Record<string, unknown>> => {
+    const id = request.id ?? null;
+    const params = request.params ?? {};
+    const tool = byName.get(params.name as string);
+    if (tool === undefined) {
+      return {
+        jsonrpc: "2.0",
+        id,
+        error: { code: -32602, message: `unknown tool: ${String(params.name)}` },
+      };
+    }
+    const result = await tool.execute(params.arguments ?? {});
+    if (result.terminate === true) didTerminate = true;
+    return {
+      jsonrpc: "2.0",
+      id,
+      result: {
+        content: [{ type: "text", text: result.content }],
+        isError: result.isError,
+      },
+    };
+  };
+
   const handle = async (request: JsonRpcRequest): Promise<Record<string, unknown> | null> => {
     const id = request.id ?? null;
     switch (request.method) {
@@ -82,27 +107,8 @@ export function createMcpHandler(
         };
       case "tools/list":
         return { jsonrpc: "2.0", id, result: { tools: listing } };
-      case "tools/call": {
-        const params = request.params ?? {};
-        const tool = byName.get(params.name as string);
-        if (tool === undefined) {
-          return {
-            jsonrpc: "2.0",
-            id,
-            error: { code: -32602, message: `unknown tool: ${String(params.name)}` },
-          };
-        }
-        const result = await tool.execute(params.arguments ?? {});
-        if (result.terminate === true) didTerminate = true;
-        return {
-          jsonrpc: "2.0",
-          id,
-          result: {
-            content: [{ type: "text", text: result.content }],
-            isError: result.isError,
-          },
-        };
-      }
+      case "tools/call":
+        return callTool(request);
       default:
         // Notifications (no id) get no reply; unknown requests get method-not-found.
         if (request.id === undefined || request.id === null) return null;
