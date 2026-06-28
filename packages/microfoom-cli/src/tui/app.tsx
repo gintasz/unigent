@@ -3,14 +3,19 @@
 // prose, and every tool call with its args + result — scrollable, sticky to the
 // newest line. Selecting a trace node filters the transcript to that subtree.
 
-import { buildRunTree, buildTranscript, type TranscriptEntry } from "@microfoom/core/trace";
+import {
+  buildRunTree,
+  buildTranscript,
+  type RunNode,
+  type TranscriptEntry,
+} from "@microfoom/core/trace";
 import {
   useKeyboard,
   useRenderer,
   useSelectionHandler,
   useTerminalDimensions,
 } from "@opentui/react";
-import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { copyToClipboard } from "./clipboard.js";
 import { MacScrollAccel } from "./scroll.js";
 import type { TuiStore } from "./store.js";
@@ -71,6 +76,19 @@ export function App({
   // query, which is what makes VS Code's light terminal show a white panel).
   const [mode, setMode] = useState<ThemeMode>(initialMode);
   const palette = paletteFor(mode);
+
+  // Header clock. The stream carries no timestamps, so we baseline on mount (a
+  // re-run respawns the process → fresh baseline) and tick ~4×/s while running.
+  // We also stamp each span's first-seen wall-clock so an in-flight (open) span can
+  // show a live elapsed the metrics column can't — it has no duration until it ends.
+  const startedAt = useMemo(() => Date.now(), []);
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (snapshot.status !== "running") return;
+    const id = setInterval(() => setNow(Date.now()), 250);
+    return () => clearInterval(id);
+  }, [snapshot.status]);
+  const firstSeen = useRef<Map<string, number>>(new Map());
   useEffect(() => {
     const sync = (): void => {
       const detected = renderer.themeMode;
@@ -148,6 +166,27 @@ export function App({
         : palette.accent;
   const statusText =
     snapshot.status === "error" ? "● error" : snapshot.status === "done" ? "● done" : "● running";
+  // Stamp the first time we see each span so an open span can report live elapsed.
+  for (const row of rows) if (!firstSeen.current.has(row.span)) firstSeen.current.set(row.span, now);
+
+  // Contextual clock. With a span selected, the header reflects THAT span: its exact
+  // duration once settled, or a live tick while it's still open. With nothing
+  // selected, it falls back to whole-run elapsed while running, and hides when done
+  // (the footer + main row already carry the final total — no need to duplicate).
+  const clock = ((): { text: string; span: boolean } | undefined => {
+    if (selected !== undefined) {
+      const node = findNode(tree, selected);
+      if (node !== undefined) {
+        const ms =
+          node.settled && node.durationMs !== undefined
+            ? node.durationMs
+            : now - (firstSeen.current.get(selected) ?? startedAt);
+        return { text: fmtSpan(ms), span: true };
+      }
+    }
+    if (snapshot.status === "running") return { text: fmtClock(now - startedAt), span: false };
+    return undefined;
+  })();
   const file = snapshot.meta?.file.split("/").pop() ?? "—";
 
   return (
@@ -165,6 +204,9 @@ export function App({
           {`  ${file}  ·  ${snapshot.meta?.harness ?? ""}  ·  ${snapshot.meta?.model ?? ""}`}
         </text>
         <box flexGrow={1} />
+        {clock !== undefined ? (
+          <text fg={clock.span ? palette.accent : palette.dim}>{`${clock.text}  `}</text>
+        ) : null}
         <text fg={statusColor}>{statusText}</text>
       </box>
 
@@ -185,6 +227,7 @@ export function App({
               key={row.span}
               row={row}
               palette={palette}
+              width={traceWidth}
               selected={row.span === selected}
               onSelect={() => setSelected(row.span)}
             />
@@ -204,7 +247,9 @@ export function App({
           titleColor={palette.dim}
         >
           {shown.length === 0 ? (
-            <text fg={palette.dim}>{emptyMessage(snapshot.status, selected)}</text>
+            <box flexDirection="column" alignItems="center" paddingTop={2}>
+              <text fg={palette.dim}>{emptyMessage(snapshot.status, selected)}</text>
+            </box>
           ) : (
             shown.map((entry, i) => (
               <EntryView key={i} entry={entry} palette={palette} showNotices={showNotices} />
@@ -234,6 +279,31 @@ export function App({
   );
 }
 
+/** Find a span node by id in the run tree (depth-first). */
+function findNode(node: RunNode, span: string): RunNode | undefined {
+  if (node.span === span) return node;
+  for (const child of node.children) {
+    const hit = findNode(child, span);
+    if (hit !== undefined) return hit;
+  }
+  return undefined;
+}
+
+/** Span duration in the trace column's style (`820ms` / `2.3s`), so the header
+ *  reading matches the selected row's metric. */
+function fmtSpan(ms: number): string {
+  return ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`;
+}
+
+/** `m:ss` (or `h:mm:ss` past an hour) for the whole-run live header clock. */
+function fmtClock(ms: number): string {
+  const total = Math.floor(ms / 1000);
+  const sec = String(total % 60).padStart(2, "0");
+  const min = Math.floor(total / 60);
+  if (min >= 60) return `${Math.floor(min / 60)}:${String(min % 60).padStart(2, "0")}:${sec}`;
+  return `${min}:${sec}`;
+}
+
 function emptyMessage(status: "running" | "done" | "error", selected: string | undefined): string {
   if (selected !== undefined) return `no transcript for ${selected} (e.g. a pure method or scope)`;
   return status === "running" ? "waiting for the run…" : "no transcript";
@@ -253,13 +323,18 @@ function footerStats(tree: ReturnType<typeof buildRunTree>): string {
 interface TraceRowProps {
   readonly row: TreeRow;
   readonly palette: Palette;
+  /** Pane width, so the label budget tracks the pane instead of a fixed cap. */
+  readonly width: number;
   readonly selected: boolean;
   readonly onSelect: () => void;
 }
 
-function TraceRowView({ row, palette, selected, onSelect }: TraceRowProps): React.ReactNode {
+function TraceRowView({ row, palette, width, selected, onSelect }: TraceRowProps): React.ReactNode {
   const indent = "  ".repeat(row.depth);
   const label = `${indent}${row.glyph} ${row.name}${row.settled ? "" : " …"}`;
+  // Reserve cells for: both borders (2), horizontal padding (2), the selection
+  // marker (2), a one-cell gap, and the metrics tail. The rest is the label budget.
+  const labelMax = Math.max(8, width - 7 - row.metrics.length);
   return (
     <box
       flexDirection="row"
@@ -268,7 +343,9 @@ function TraceRowView({ row, palette, selected, onSelect }: TraceRowProps): Reac
       backgroundColor={selected ? palette.selBg : palette.panelBg}
       onMouseDown={onSelect}
     >
-      <text fg={KIND_COLOR(palette, row.kind)}>{ellipsize(label, 40)}</text>
+      {/* A bar marker so the focused row reads even with no background color. */}
+      <text fg={palette.accent}>{selected ? "▌ " : "  "}</text>
+      <text fg={KIND_COLOR(palette, row.kind)}>{ellipsize(label, labelMax)}</text>
       <box flexGrow={1} />
       <text fg={palette.dim}>{row.metrics}</text>
     </box>
