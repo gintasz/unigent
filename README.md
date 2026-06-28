@@ -109,8 +109,6 @@ Inside `main()`, `this.agent` is your handle to the runtime — how your program
 - **`prose`** — a freeform natural-language turn: the ordinary case of the agent answering your prompt. Its reply *is* the return value — `await` for the full text.
 - **`do`** — an act turn: run instructions for their side effects and resolve to `void`. The cheapest mode — no schema, no final message. The agent is told to finish with a no-argument `foom_return`, which cuts the unnecessary yapping you'd otherwise pay for (the "I've successfully completed your request… let me know if you need anything else!" tail).
 
-`.with({ ... })` layers per-call config; `.session()` opens a stateful conversation (shared transcript, `.fork()` to branch); `.scope("name")` (via `@microfoom/core/trace`) groups turns in the trace tree.
-
 ## Control operations given to the agents
 
 An agent running inside a microfoom runtime interacts with it through 4 native tools — surfaced as structured function calls.
