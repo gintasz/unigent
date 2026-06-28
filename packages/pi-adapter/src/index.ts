@@ -210,6 +210,66 @@ function addUsage(into: UsageDelta, usage: Usage): UsageDelta {
   };
 }
 
+/** Map a requested thinking level to a pi level pi accepts, else "off". */
+function resolveThinking(thinking: string | undefined): ThinkingLevel {
+  return thinking !== undefined && PI_THINKING.has(thinking) ? (thinking as ThinkingLevel) : "off";
+}
+
+/** This turn's tools: harness tools narrowed by request.allowedTools (undefined =
+ *  all, [] = none), then the always-exposed per-turn FOOM tools. */
+function selectTurnTools(runtime: PiRuntime, request: SessionTurnRequest): AgentTool[] {
+  const allowed = request.allowedTools;
+  const harnessTools = (runtime.harnessTools ?? []).filter(
+    (tool) => allowed === undefined || allowed.includes(tool.name),
+  );
+  return [...harnessTools, ...request.tools.map(toAgentTool)];
+}
+
+/** The MICROFOOM_DUMP_PAYLOAD escape hatch: when set, append each exact provider
+ *  request body to the file as JSONL. Returns the Agent option fragment (empty
+ *  when unset) — the ground truth of what the model receives. */
+function payloadDumpOptions(): { onPayload?: (payload: unknown) => undefined } {
+  const dumpFile = process.env.MICROFOOM_DUMP_PAYLOAD;
+  if (dumpFile === undefined) return {};
+  return {
+    onPayload: (payload: unknown) => {
+      appendFileSync(dumpFile, `${JSON.stringify(payload)}\n`);
+      return undefined;
+    },
+  };
+}
+
+/** Forward pi's live lifecycle events to the run's transcript stream for one turn.
+ *  Returns an unsubscribe fn, or undefined when no one is listening. */
+function subscribeStream(
+  agent: Agent,
+  onEvent: ((event: StreamEvent) => void) | undefined,
+): (() => void) | undefined {
+  if (onEvent === undefined) return undefined;
+  return agent.subscribe((event) => {
+    const stream = toStreamEvent(event);
+    if (stream !== undefined) onEvent(stream);
+  });
+}
+
+/** Usage + assistant text for the messages THIS turn appended. A pi "error"
+ *  stopReason (a request/model/network failure the loop resolves rather than
+ *  throws) is surfaced as a harness failure so the run reports it instead of
+ *  masking it as a missing foom_return. */
+function collectTurnResult(newMessages: readonly AgentMessage[]): SessionTurnResult {
+  let text = "";
+  let usage: UsageDelta = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
+  for (const message of newMessages) {
+    if (message.role !== "assistant") continue;
+    if (message.stopReason === "error") {
+      throw new FoomtimeHarnessUnavailableError(message.errorMessage ?? "model error");
+    }
+    text = assistantText(message);
+    usage = addUsage(usage, message.usage);
+  }
+  return { assistantText: text, usage };
+}
+
 /** Overrides for testing or custom wiring; defaults resolve from ~/.pi. */
 export interface PiSessionOptions {
   /** Resolve a model id ("provider/id") to a pi Model. Default: ModelRegistry. */
@@ -419,97 +479,59 @@ export function createPiOpenSession(options: PiSessionOptions = {}): OpenSession
     // seeded with prior messages is a fork() branch (see below).
     const makeHarnessSession = (seed?: readonly AgentMessage[]): HarnessSession => {
       let agent: Agent | undefined;
+
+      // Create the per-session Agent on first turn (seeding a fork's transcript), or
+      // re-point the existing one at this turn's prompt/thinking/tools. Reusing it
+      // preserves the pi transcript so a session() is one continued conversation.
+      const ensureAgent = (
+        systemPrompt: string,
+        thinkingLevel: ThinkingLevel,
+        tools: AgentTool[],
+      ): Agent => {
+        if (agent === undefined) {
+          agent = new Agent({
+            initialState: { systemPrompt, model, thinkingLevel, tools },
+            streamFn: runtime.streamFn,
+            convertToLlm: (messages: AgentMessage[]) =>
+              messages.filter(
+                (message): message is Message =>
+                  message.role === "user" ||
+                  message.role === "assistant" ||
+                  message.role === "toolResult",
+              ),
+            ...payloadDumpOptions(),
+          });
+          // Branch seed: continue from a copy of the parent transcript (fork()).
+          if (seed !== undefined) agent.state.messages = [...seed];
+          return agent;
+        }
+        agent.state.systemPrompt = systemPrompt;
+        agent.state.thinkingLevel = thinkingLevel;
+        agent.state.tools = tools;
+        return agent;
+      };
+
       return {
         // The model receives pi's base prompt with the program prompt appended.
         systemPrompt(programPrompt: string): string {
           return composeSystemPrompt(runtime.basePrompt, programPrompt);
         },
         async runTurn(request: SessionTurnRequest): Promise<SessionTurnResult> {
-          const thinkingLevel: ThinkingLevel =
-            request.thinking !== undefined && PI_THINKING.has(request.thinking)
-              ? (request.thinking as ThinkingLevel)
-              : "off";
-          // Harness tools narrowed by request.allowedTools (undefined = all, [] =
-          // none), then the per-turn FOOM tools (always exposed).
-          const allowed = request.allowedTools;
-          const harnessTools = (runtime.harnessTools ?? []).filter(
-            (tool) => allowed === undefined || allowed.includes(tool.name),
-          );
-          const tools = [...harnessTools, ...request.tools.map(toAgentTool)];
+          const thinkingLevel = resolveThinking(request.thinking);
+          const tools = selectTurnTools(runtime, request);
           const systemPrompt = composeSystemPrompt(runtime.basePrompt, request.systemPrompt);
-          if (agent === undefined) {
-            agent = new Agent({
-              initialState: { systemPrompt, model, thinkingLevel, tools },
-              streamFn: runtime.streamFn,
-              convertToLlm: (messages: AgentMessage[]) =>
-                messages.filter(
-                  (message): message is Message =>
-                    message.role === "user" ||
-                    message.role === "assistant" ||
-                    message.role === "toolResult",
-                ),
-              // Debug escape hatch (parallel to MICROFOOM_LOG): append the EXACT
-              // provider request body — system message, messages, tools — as JSONL.
-              // The ground truth of what the model receives.
-              ...(process.env.MICROFOOM_DUMP_PAYLOAD !== undefined
-                ? {
-                    onPayload: (payload: unknown) => {
-                      appendFileSync(
-                        process.env.MICROFOOM_DUMP_PAYLOAD as string,
-                        `${JSON.stringify(payload)}\n`,
-                      );
-                      return undefined;
-                    },
-                  }
-                : {}),
-            });
-            // Branch seed: continue from a copy of the parent transcript (fork()).
-            if (seed !== undefined) agent.state.messages = [...seed];
-          } else {
-            agent.state.systemPrompt = systemPrompt;
-            agent.state.thinkingLevel = thinkingLevel;
-            agent.state.tools = tools;
-          }
+          const activeAgent = ensureAgent(systemPrompt, thinkingLevel, tools);
 
-          // Forward pi's live lifecycle events to the run's transcript stream while
-          // this turn runs (assistant deltas, tool calls/results). Only subscribe
-          // when someone is listening, and always unsubscribe after the turn.
-          const onEvent = request.onEvent;
-          const unsubscribe =
-            onEvent !== undefined
-              ? agent.subscribe((event) => {
-                  const stream = toStreamEvent(event);
-                  if (stream !== undefined) onEvent(stream);
-                })
-              : undefined;
-
-          const before = agent.state.messages.length;
+          const unsubscribe = subscribeStream(activeAgent, request.onEvent);
+          const before = activeAgent.state.messages.length;
           try {
-            await agent.prompt(request.prompt);
+            await activeAgent.prompt(request.prompt);
           } finally {
             unsubscribe?.();
           }
-          logTurn(logFile, model.id, request, agent.state.messages.slice(before), tools);
-
-          // Usage + text for THIS turn only — the messages appended by this prompt.
-          let text = "";
-          let usage: UsageDelta = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
-          const messages = agent.state.messages;
-          for (let index = before; index < messages.length; index += 1) {
-            const message = messages[index];
-            if (message?.role === "assistant") {
-              // pi-agent-core encodes request/model/network failure as a stopReason
-              // "error" message (the loop resolves, never throws). Surface it as a
-              // harness failure so the run reports it instead of masking it as a
-              // missing `foom_return`.
-              if (message.stopReason === "error") {
-                throw new FoomtimeHarnessUnavailableError(message.errorMessage ?? "model error");
-              }
-              text = assistantText(message);
-              usage = addUsage(usage, message.usage);
-            }
-          }
-          return { assistantText: text, usage };
+          const newMessages = activeAgent.state.messages.slice(before);
+          logTurn(logFile, model.id, request, newMessages, tools);
+          return collectTurnResult(newMessages);
         },
         // Branch: a new pi session seeded with a COPY of the transcript so far (or
         // the inherited seed when no turn has run yet), diverging independently.
