@@ -90,7 +90,10 @@ export default class extends Program(Input) {
 }
 ```
 
-## The four control operations
+## Supported harnesses
+pi, claude code cli (uses `-p` command)
+
+## Control operations given to agent
 
 An agent running inside a microfoom runtime interacts with it through 4 native tools it is given.
 
@@ -98,6 +101,9 @@ An agent running inside a microfoom runtime interacts with it through 4 native t
 - `foom_return(value)` — hand back the turn's result, validated against your schema.
 - `foom_throw(message, code?)` — abort the turn with a deliberate error.
 - `foom_inspect(method_name)` — look up an exposed method's parameter schema before calling it.
+
+Other than these 4 extra tools, and few lines added to agent's system prompt, agent, spawned by coordination script is no different than an agent spawned by a cli.
+
 
 ## Run it
 
