@@ -1,7 +1,7 @@
 <div align="center">
 
 <!-- Replace with your hero image (logo / banner). -->
-<img src="https://github.com/gintasz/microfoom/raw/main/assets/diagram.png" alt="microfoom" width="640" />
+<img src="https://github.com/gintasz/microfoom/raw/main/assets/diagram.png" alt="coordination engineering" width="640" />
 
 # microfoom
 
@@ -116,6 +116,6 @@ microfoom run ./researcher.ts --tui
 <div align="center">
 
 <!-- Replace with a screenshot of `microfoom run … --tui`. -->
-<img src="./assets/tui.png" alt="microfoom terminal UI" width="820" />
+<img src="https://github.com/gintasz/microfoom/raw/main/assets/tui.png" alt="microfoom terminal UI" width="820" />
 
 </div>
