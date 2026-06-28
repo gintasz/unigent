@@ -131,7 +131,7 @@ export function spawnClaude(spec: ClaudeSpec): ClaudeProcess {
   child.on("error", (error) => {
     stderr += String(error);
   });
-  child.stderr.on("data", (chunk) => {
+  child.stderr.on("data", (chunk: Buffer) => {
     stderr += chunk.toString();
   });
 
