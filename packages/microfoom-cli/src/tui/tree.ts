@@ -3,6 +3,7 @@
 // transcript to that subtree). No React, no color — trivially testable.
 
 import type { RunNode } from "@microfoom/core/trace";
+import { fmtCost, fmtDuration, fmtTokens } from "../format.js";
 
 export interface TreeRow {
   readonly span: string;
@@ -19,15 +20,10 @@ export interface TreeRow {
 
 function metricsOf(node: RunNode): string {
   const parts: string[] = [];
-  if (node.durationMs !== undefined)
-    parts.push(
-      node.durationMs < 1000 ? `${node.durationMs}ms` : `${(node.durationMs / 1000).toFixed(1)}s`,
-    );
-  if (node.usage.totalTokens > 0) parts.push(`${node.usage.totalTokens}tok`);
+  if (node.durationMs !== undefined) parts.push(fmtDuration(node.durationMs));
+  if (node.usage.totalTokens > 0) parts.push(fmtTokens(node.usage.totalTokens));
   if (node.usage.costUsd !== undefined && node.usage.costUsd > 0)
-    parts.push(
-      `$${node.usage.costUsd < 0.1 ? node.usage.costUsd.toFixed(4) : node.usage.costUsd.toFixed(2)}`,
-    );
+    parts.push(fmtCost(node.usage.costUsd));
   return parts.join("  ");
 }
 

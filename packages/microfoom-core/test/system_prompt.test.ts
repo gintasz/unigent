@@ -115,14 +115,14 @@ describe("system prompt fidelity", () => {
   });
 });
 
-describe("allowedTools cascade (default → @foom.config → .with)", () => {
-  it("threads the merged allowlist to the harness request, nearest scope winning", async () => {
+describe("tools cascade (default → @foom.config → .with)", () => {
+  it("threads the merged tool list to the harness request, nearest scope winning", async () => {
     const sink = emptySink();
-    @foom.config({ allowedTools: ["read", "bash"] })
+    @foom.config({ tools: ["read", "bash"] })
     class P extends Program<typeof stringInput, string>(stringInput) {
       async main(): Promise<string> {
         const a = await this.agent.text`from class config`;
-        const b = await this.agent.with({ allowedTools: ["read"] }).text`narrowed`;
+        const b = await this.agent.with({ tools: ["read"] }).text`narrowed`;
         return `${a}${b}`;
       }
     }
@@ -141,7 +141,7 @@ describe("allowedTools cascade (default → @foom.config → .with)", () => {
     await runProgram(P, "x", {
       harnesses: { default: spyOpenSession(sink) },
       model: "fake",
-      defaults: { allowedTools: [] },
+      defaults: { tools: [] },
     });
     expect(sink.allowedTools).toEqual([[]]);
   });

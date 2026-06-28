@@ -33,10 +33,10 @@ describe("renderRunTree", () => {
 
     // Metrics right-aligned to the width (rolled-up cost on main = child's 0.02;
     // sub-cent fraction renders at 4dp → $0.0200).
-    expect(lines[0]).toContain("12.4s");
+    expect(lines[0]).toContain("12s");
     expect(lines[0].trimEnd().endsWith("$0.0200")).toBe(true);
     expect(lines[0].length).toBe(64);
-    expect(lines[1]).toContain("2.1s");
+    expect(lines[1]).toContain("2s");
     expect(lines[1].trimEnd().endsWith("$0.0200")).toBe(true);
   });
 
@@ -56,6 +56,6 @@ describe("renderRunTree", () => {
     ];
     const out = renderRunTree(buildRunTree(long), { width: 40, color: false });
     expect(out.length).toBeLessThanOrEqual(40);
-    expect(out).toContain("5ms");
+    expect(out).toContain("<1s");
   });
 });

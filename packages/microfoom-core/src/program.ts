@@ -22,7 +22,7 @@ import type { AgentOptions } from "./options.js";
 import { type ExposeMeta, exposedMethods, readClassMeta } from "./registry.js";
 import { type AgentResult, type AgentTextStream, makeResult, makeTextStream } from "./result.js";
 import { type DerivedParameters, deriveMethodParameters } from "./schema_derive.js";
-import type { HarnessSession, OpenSession } from "./session.js";
+import type { HarnessSession, HarnessSessionOptions, OpenSession } from "./session.js";
 import {
   type ProgramTurnContext,
   type ResolvedCaps,
@@ -383,7 +383,7 @@ function prepare(runtime: Runtime, options: AgentOptions): Prepared {
     systemPrompt,
     caps: resolveCaps(merged),
     ...(merged.thinking !== undefined ? { thinking: merged.thinking } : {}),
-    ...(merged.allowedTools !== undefined ? { allowedTools: merged.allowedTools } : {}),
+    ...(merged.tools !== undefined ? { allowedTools: merged.tools } : {}),
   };
   return prepared;
 }
@@ -553,7 +553,13 @@ function statelessSource(runtime: Runtime, model: string, options: AgentOptions)
   // harness is resolved per turn, so a method's @foom.config({ harness }) (live in
   // runtime.methodConfig while it runs) takes effect for turns it makes.
   return {
-    get: () => Promise.resolve(harnessPort(runtime, optionsHarness(runtime, options))({ model })),
+    get: () =>
+      Promise.resolve(
+        harnessPort(
+          runtime,
+          optionsHarness(runtime, options),
+        )(openOptions(runtime, model, options)),
+      ),
   };
 }
 
@@ -612,7 +618,7 @@ function makeSession(runtime: Runtime, options: AgentOptions): AgentSession {
   return sessionHandle(
     runtime,
     options,
-    makeSource(() => Promise.resolve(port({ model }))),
+    makeSource(() => Promise.resolve(port(openOptions(runtime, model, options)))),
   );
 }
 
@@ -624,6 +630,29 @@ function optionsModel(runtime: Runtime, options: AgentOptions): string {
   );
   if (merged.model === undefined) throw new FoomtimeConfigError("no model configured");
   return merged.model;
+}
+
+/**
+ * Session-open options for a scope: the resolved model plus the merged session-level
+ * resources (skills/plugins). Resolved with the SAME scope chain as the model, so a
+ * method/per-call `@foom.config({ skills })` takes effect for the session that scope
+ * opens (fresh per stateless turn; once per stateful session).
+ */
+function openOptions(
+  runtime: Runtime,
+  model: string,
+  options: AgentOptions,
+): HarnessSessionOptions {
+  const merged = mergeConfigChain(
+    [runtime.defaults, runtime.classConfig, pickConfig(options)].filter(
+      (c): c is AgentConfig => c !== undefined,
+    ),
+  );
+  return {
+    model,
+    ...(merged.skills !== undefined ? { skills: merged.skills } : {}),
+    ...(merged.plugins !== undefined ? { plugins: merged.plugins } : {}),
+  };
 }
 
 /** Look up a registered harness port by name; an unknown name is a typed error. */

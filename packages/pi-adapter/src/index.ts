@@ -228,19 +228,6 @@ export interface PiSessionOptions {
   readonly basePrompt?: string;
   /** Override the harness tool suite (tests / custom wiring). Default: pi's configured tools. */
   readonly tools?: readonly AgentTool[];
-  /**
-   * Skills advertised in the system prompt (pi loads SKILL.md catalogs from ~/.pi).
-   * Tri-state, mirroring `allowedTools`: `undefined` = all installed, `[]` = none,
-   * a list = only those (matched by skill name). Session-level: the catalog is baked
-   * into the base prompt at session creation, not per turn.
-   */
-  readonly allowedSkills?: readonly string[];
-  /**
-   * Plugins to load — pi calls these "extensions"; they contribute tools (and skills/
-   * prompts). Tri-state: `undefined` = all installed, `[]` = none, a list = only those
-   * (matched by the extension's source name). Session-level, like {@link allowedSkills}.
-   */
-  readonly allowedPlugins?: readonly string[];
 }
 
 interface PiRuntime {
@@ -315,9 +302,20 @@ async function buildResourceLoader(
   return loader;
 }
 
+/** A stable cache key for one (allowedSkills, allowedPlugins) pair. `*` = all
+ *  (undefined), `-` = none ([]), else the sorted names — so the tri-state and order
+ *  don't spawn redundant runtimes. */
+function runtimeKey(
+  allowedSkills: readonly string[] | undefined,
+  allowedPlugins: readonly string[] | undefined,
+): string {
+  const ser = (v: readonly string[] | undefined): string =>
+    v === undefined ? "*" : v.length === 0 ? "-" : [...v].sort().join(",");
+  return `${ser(allowedSkills)}|${ser(allowedPlugins)}`;
+}
+
 export function createPiOpenSession(options: PiSessionOptions = {}): OpenSession {
   const logFile = options.logFile ?? process.env.MICROFOOM_LOG;
-  let cached: PiRuntime | undefined;
 
   // `omitHarnessBasePrompt` drops pi's base PROMPT only (persona/context). Which
   // tools are exposed is independent — controlled per-turn by request.allowedTools.
@@ -326,28 +324,37 @@ export function createPiOpenSession(options: PiSessionOptions = {}): OpenSession
     options.omitHarnessBasePrompt === true ? undefined : (options.basePrompt ?? piBase);
   const resolveTools = (piTools: readonly AgentTool[] | undefined) => options.tools ?? piTools;
 
-  const init = async (): Promise<PiRuntime> => {
-    if (cached !== undefined) return cached;
+  // skills/plugins arrive PER session-open (resolved from the scope's merged config —
+  // see core's openOptions), so the resolved runtime is memoized per set, not once.
+  // The model registry is heavy and set-independent, so it's shared.
+  const runtimeCache = new Map<string, Promise<PiRuntime>>();
+  let sharedRegistry: ReturnType<typeof ModelRegistry.create> | undefined;
+
+  const buildRuntime = async (
+    allowedSkills: readonly string[] | undefined,
+    allowedPlugins: readonly string[] | undefined,
+  ): Promise<PiRuntime> => {
     if (options.streamFn !== undefined) {
-      cached = {
+      return {
         streamFn: options.streamFn,
         basePrompt: resolveBase(undefined),
         harnessTools: resolveTools(undefined),
       };
-      return cached;
     }
-    const registry = ModelRegistry.create(AuthStorage.create());
-    registry.refresh();
+    if (sharedRegistry === undefined) {
+      sharedRegistry = ModelRegistry.create(AuthStorage.create());
+      sharedRegistry.refresh();
+    }
+    const registry = sharedRegistry;
     // createAgentSession (a MAIN export) wires model/auth/providers + the default
     // tool suite from ~/.pi. We reuse its stream function AND its tools so a microfoom
     // turn is a full pi agent that also speaks the FOOM protocol; request.allowedTools
     // narrows the set per turn.
     //
-    // Skills + plugins are session-level: pi bakes the skill catalog into the base
-    // prompt and the plugin tools into the tool set AT SESSION CREATION. To constrain
-    // them we hand createAgentSession a resource loader filtered to the allowed sets;
-    // when neither is constrained we pass none and inherit pi's defaults verbatim.
-    const resourceLoader = await buildResourceLoader(options.allowedSkills, options.allowedPlugins);
+    // Skills + plugins are baked into the prompt + tool set AT SESSION CREATION, so we
+    // hand createAgentSession a resource loader filtered to the allowed sets; when
+    // neither is constrained we pass none and inherit pi's defaults verbatim.
+    const resourceLoader = await buildResourceLoader(allowedSkills, allowedPlugins);
     const available = registry.getAvailable();
     const seed = available[0] ?? registry.getAll()[0];
     const { session } = await createAgentSession({
@@ -355,17 +362,29 @@ export function createPiOpenSession(options: PiSessionOptions = {}): OpenSession
       ...(seed !== undefined ? { model: seed } : {}),
       ...(resourceLoader !== undefined ? { resourceLoader } : {}),
     });
-    cached = {
+    return {
       streamFn: session.agent.streamFn,
       registry,
       basePrompt: resolveBase(session.agent.state.systemPrompt),
       harnessTools: resolveTools(session.agent.state.tools),
     };
-    return cached;
   };
 
-  return async ({ model: modelId }) => {
-    const runtime = await init();
+  const initFor = (
+    allowedSkills: readonly string[] | undefined,
+    allowedPlugins: readonly string[] | undefined,
+  ): Promise<PiRuntime> => {
+    const key = runtimeKey(allowedSkills, allowedPlugins);
+    let pending = runtimeCache.get(key);
+    if (pending === undefined) {
+      pending = buildRuntime(allowedSkills, allowedPlugins);
+      runtimeCache.set(key, pending);
+    }
+    return pending;
+  };
+
+  return async ({ model: modelId, skills, plugins }) => {
+    const runtime = await initFor(skills, plugins);
     const resolveModel =
       options.resolveModel ??
       ((id: string): Model<Api> | undefined => {

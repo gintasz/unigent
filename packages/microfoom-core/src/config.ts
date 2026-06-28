@@ -28,11 +28,19 @@ export interface AgentConfig {
    *  the run's harness registry (resolved at session-open), so the generic core
    *  never names a concrete adapter. */
   harness?: string;
-  /** Allowlist of harness-provided tool names the model may use this scope. Opaque
-   *  strings the harness resolves (core never enumerates them). `undefined` = all of
-   *  the harness's tools; `[]` = none. The FOOM protocol tools are always available
-   *  regardless. */
-  allowedTools?: readonly string[];
+  /** The harness tools the model may use this scope (opaque names the harness
+   *  resolves; core never enumerates them). `undefined` = all the harness offers;
+   *  `[]` = none; a list = only those. The FOOM protocol tools are always available
+   *  regardless — this gates only the harness's own tools, per turn. */
+  tools?: readonly string[];
+  /** The skills the harness advertises to the model this scope (opaque names the
+   *  harness resolves). `undefined` = all the harness discovers; `[]` = none; a list
+   *  = only those. Session-level for a stateful session (fixed at open); per-scope
+   *  for stateless turns (each opens a fresh session). */
+  skills?: readonly string[];
+  /** The plugins the harness loads this scope (pi calls these "extensions"; opaque
+   *  names). Same tri-state + session timing as {@link skills}. */
+  plugins?: readonly string[];
   thinking?: ThinkingLevel;
   retries?: number;
   repairAttempts?: number;
@@ -119,7 +127,9 @@ function compact(config: LooseConfig): AgentConfig {
   const out: AgentConfig = {};
   if (config.model !== undefined) out.model = config.model;
   if (config.harness !== undefined) out.harness = config.harness;
-  if (config.allowedTools !== undefined) out.allowedTools = config.allowedTools;
+  if (config.tools !== undefined) out.tools = config.tools;
+  if (config.skills !== undefined) out.skills = config.skills;
+  if (config.plugins !== undefined) out.plugins = config.plugins;
   if (config.thinking !== undefined) out.thinking = config.thinking;
   if (config.retries !== undefined) out.retries = config.retries;
   if (config.repairAttempts !== undefined) out.repairAttempts = config.repairAttempts;
@@ -139,7 +149,9 @@ export function mergeConfig(wider: AgentConfig, narrower: AgentConfig): AgentCon
   const merged: LooseConfig = {
     model: override(wider.model, narrower.model),
     harness: override(wider.harness, narrower.harness),
-    allowedTools: override(wider.allowedTools, narrower.allowedTools),
+    tools: override(wider.tools, narrower.tools),
+    skills: override(wider.skills, narrower.skills),
+    plugins: override(wider.plugins, narrower.plugins),
     thinking: override(wider.thinking, narrower.thinking),
     retries: override(wider.retries, narrower.retries),
     repairAttempts: override(wider.repairAttempts, narrower.repairAttempts),

@@ -120,6 +120,13 @@ export interface HarnessSession {
 /** A harness opens one session per program run, given the run's model + caps. */
 export interface HarnessSessionOptions {
   readonly model: string;
+  /** Skills to advertise this session (opaque names). `undefined` = all the harness
+   *  discovers; `[]` = none; a list = only those. Resolved from the scope's merged
+   *  config at open — see AgentConfig.skills. */
+  readonly skills?: readonly string[];
+  /** Plugins ("extensions" in pi) to load this session. Same tri-state as
+   *  {@link skills}. */
+  readonly plugins?: readonly string[];
 }
 
 /** Factory the runner calls to open a session for a program run. */

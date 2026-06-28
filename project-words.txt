@@ -84,3 +84,5 @@ trackpad
 respawns
 respawn
 ellipsize
+Mtok
+ktok

@@ -43,9 +43,9 @@ async function main(): Promise<void> {
       harness: { type: "string" },
       model: { type: "string" },
       thinking: { type: "string" },
-      "allowed-tools": { type: "string" },
-      "allowed-skills": { type: "string" },
-      "allowed-plugins": { type: "string" },
+      tools: { type: "string" },
+      skills: { type: "string" },
+      plugins: { type: "string" },
       input: { type: "string" },
       theme: { type: "string" },
       "omit-harness-prompt": { type: "boolean", default: false },
@@ -60,7 +60,10 @@ async function main(): Promise<void> {
     process.exit(1);
   }
   const sourceFile = isAbsolute(file) ? file : resolve(process.cwd(), file);
-  const input = parseInput(values.input ?? positionals[1] ?? "");
+  // No input token → `undefined` (not "") so `Program(z.void())` validates; an
+  // explicit value is parsed as given. Mirrors the node CLI.
+  const rawInput = values.input ?? positionals[1];
+  const input = rawInput === undefined ? undefined : parseInput(rawInput);
   const harnessName = values.harness ?? "pi";
   const model =
     values.model ?? process.env.MICROFOOM_MODEL ?? "openrouter/deepseek/deepseek-v4-flash";
@@ -77,18 +80,19 @@ async function main(): Promise<void> {
           .split(",")
           .map((name) => name.trim())
           .filter((name) => name.length > 0);
-  const allowedSkills = toList(values["allowed-skills"]);
-  const allowedPlugins = toList(values["allowed-plugins"]);
+  const skills = toList(values.skills);
+  const plugins = toList(values.plugins);
   const openSession =
     harnessName === "pi"
-      ? createPiOpenSession({
-          omitHarnessBasePrompt: values["omit-harness-prompt"],
-          ...(allowedSkills !== undefined ? { allowedSkills } : {}),
-          ...(allowedPlugins !== undefined ? { allowedPlugins } : {}),
-        })
+      ? createPiOpenSession({ omitHarnessBasePrompt: values["omit-harness-prompt"] })
       : makeHarness();
   const store = createStore();
-  store.setMeta({ file: sourceFile, model, harness: harnessName, input: String(input) });
+  store.setMeta({
+    file: sourceFile,
+    model,
+    harness: harnessName,
+    input: input === undefined ? "" : String(input),
+  });
 
   // Mount the UI first so it shows immediately, then drive the run into the store.
   const renderer = await createCliRenderer({ useMouse: true, exitOnCtrlC: true, targetFps: 30 });
@@ -129,13 +133,12 @@ async function main(): Promise<void> {
     store.done(undefined, `${sourceFile} has no default-exported program`);
     return;
   }
-  const allowedTools = values["allowed-tools"]
-    ?.split(",")
-    .map((name) => name.trim())
-    .filter((name) => name.length > 0);
+  const tools = toList(values.tools);
   const defaults = {
     ...(values.thinking !== undefined ? { thinking: values.thinking } : {}),
-    ...(allowedTools !== undefined ? { allowedTools } : {}),
+    ...(tools !== undefined ? { tools } : {}),
+    ...(skills !== undefined ? { skills } : {}),
+    ...(plugins !== undefined ? { plugins } : {}),
   };
   try {
     const result = await runProgram(ProgramClass as never, input, {

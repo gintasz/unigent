@@ -1,5 +1,6 @@
 # microfoom
-Typed building blocks for coordination engineering.
+Typed building blocks for agentic **coordination engineering**.
+
 
 A TypeScript runtime where **your code orchestrates and the model does only the
 fuzzy work**. You write ordinary TypeScript — control flow, recursion, parallelism,

@@ -16,6 +16,7 @@ import {
   useTerminalDimensions,
 } from "@opentui/react";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { fmtCost, fmtDuration, fmtTokens } from "../format.js";
 import { copyToClipboard } from "./clipboard.js";
 import { MacScrollAccel } from "./scroll.js";
 import type { TuiStore } from "./store.js";
@@ -181,10 +182,10 @@ export function App({
           node.settled && node.durationMs !== undefined
             ? node.durationMs
             : now - (firstSeen.current.get(selected) ?? startedAt);
-        return { text: fmtSpan(ms), span: true };
+        return { text: fmtDuration(ms), span: true };
       }
     }
-    if (snapshot.status === "running") return { text: fmtClock(now - startedAt), span: false };
+    if (snapshot.status === "running") return { text: fmtDuration(now - startedAt), span: false };
     return undefined;
   })();
   const file = snapshot.meta?.file.split("/").pop() ?? "—";
@@ -246,7 +247,7 @@ export function App({
           title={focusSpans === undefined ? " TRANSCRIPT " : ` TRANSCRIPT · ${selected} `}
           titleColor={palette.dim}
         >
-          {shown.length === 0 ? (
+          {shown.length === 0 && snapshot.error === undefined ? (
             <box flexDirection="column" alignItems="center" paddingTop={2}>
               <text fg={palette.dim}>{emptyMessage(snapshot.status, selected)}</text>
             </box>
@@ -255,6 +256,15 @@ export function App({
               <EntryView key={i} entry={entry} palette={palette} showNotices={showNotices} />
             ))
           )}
+          {/* Surface a run failure (bad input schema, thrown program, …) in the pane
+              itself — the header alone only flips to "● error". Last child so it stays
+              visible under the transcript's sticky-bottom scroll. */}
+          {snapshot.error !== undefined ? (
+            <box flexDirection="column" paddingTop={1} paddingLeft={1} paddingRight={1}>
+              <text fg={palette.error}>✦ error</text>
+              <text fg={palette.error}>{snapshot.error}</text>
+            </box>
+          ) : null}
         </scrollbox>
       </box>
 
@@ -289,20 +299,6 @@ function findNode(node: RunNode, span: string): RunNode | undefined {
   return undefined;
 }
 
-/** Span duration in the trace column's style (`820ms` / `2.3s`), so the header
- *  reading matches the selected row's metric. */
-function fmtSpan(ms: number): string {
-  return ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`;
-}
-
-/** `m:ss` (or `h:mm:ss` past an hour) for the whole-run live header clock. */
-function fmtClock(ms: number): string {
-  const total = Math.floor(ms / 1000);
-  const sec = String(total % 60).padStart(2, "0");
-  const min = Math.floor(total / 60);
-  if (min >= 60) return `${Math.floor(min / 60)}:${String(min % 60).padStart(2, "0")}:${sec}`;
-  return `${min}:${sec}`;
-}
 
 function emptyMessage(status: "running" | "done" | "error", selected: string | undefined): string {
   if (selected !== undefined) return `no transcript for ${selected} (e.g. a pure method or scope)`;
@@ -311,12 +307,9 @@ function emptyMessage(status: "running" | "done" | "error", selected: string | u
 
 function footerStats(tree: ReturnType<typeof buildRunTree>): string {
   const u = tree.usage;
-  const parts: string[] = [`${u.totalTokens}tok`];
-  if (u.costUsd !== undefined && u.costUsd > 0) parts.push(`$${u.costUsd.toFixed(4)}`);
-  if (tree.durationMs !== undefined)
-    parts.push(
-      tree.durationMs < 1000 ? `${tree.durationMs}ms` : `${(tree.durationMs / 1000).toFixed(1)}s`,
-    );
+  const parts: string[] = [fmtTokens(u.totalTokens)];
+  if (u.costUsd !== undefined && u.costUsd > 0) parts.push(fmtCost(u.costUsd));
+  if (tree.durationMs !== undefined) parts.push(fmtDuration(tree.durationMs));
   return parts.join("  ");
 }
 

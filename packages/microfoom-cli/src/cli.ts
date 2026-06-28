@@ -42,12 +42,12 @@ Options:
                       base prompt — pi's coding-agent persona + project context)
   --model <id>        model id (default: $MICROFOOM_MODEL or a deepseek default)
   --thinking <level>  off | minimal | low | medium | high | xhigh
-  --allowed-tools <a,b>   comma-separated allowlist of harness tools (default: all; "" = none;
-                      FOOM tools always available)
-  --allowed-skills <a,b>  allowlist of skills advertised to the model (default: all installed;
-                      "" = none; matched by skill name). pi only.
-  --allowed-plugins <a,b> allowlist of plugins/extensions to load (default: all installed;
-                      "" = none; matched by source name). pi only.
+  --tools <a,b>       harness tools to expose (default: all; "" = none; comma-separated
+                      names). FOOM protocol tools are always available.
+  --skills <a,b>      skills to load for the model (default: all installed; "" = none;
+                      by skill name). pi only.
+  --plugins <a,b>     plugins/extensions to load (default: all installed; "" = none;
+                      by source name). pi only.
   --input <value>     program input (alternative to the positional)
   --tui               open the interactive two-pane inspector (trace tree + live
                       transcript; mouse + scroll). Runs under bun; stays open when
@@ -80,8 +80,9 @@ function stringifyResult(result: unknown): string {
   return typeof result === "string" ? result : JSON.stringify(result);
 }
 
-/** Parse a tri-state `--allowed-*` value: undefined → all; "" → none ([]); else CSV. */
-function parseAllowedList(raw: string | undefined): readonly string[] | undefined {
+/** Parse a tri-state list flag (--tools/--skills/--plugins): undefined → all (inherit);
+ *  "" → none ([]); else comma-separated names. */
+function parseList(raw: string | undefined): readonly string[] | undefined {
   if (raw === undefined) return undefined;
   return raw
     .split(",")
@@ -89,11 +90,20 @@ function parseAllowedList(raw: string | undefined): readonly string[] | undefine
     .filter((name) => name.length > 0);
 }
 
-/** Build the run-level config defaults from CLI flags (only set fields present). */
-function cliDefaults(thinking: string | undefined, allowedTools: readonly string[] | undefined) {
+/** Build the run-level config defaults from CLI flags (only set fields present).
+ *  These become the run's widest config scope, so skills/plugins reach the harness
+ *  at session-open (and a program's @foom.config can still override). */
+function cliDefaults(
+  thinking: string | undefined,
+  tools: readonly string[] | undefined,
+  skills: readonly string[] | undefined,
+  plugins: readonly string[] | undefined,
+) {
   return {
     ...(thinking !== undefined ? { thinking } : {}),
-    ...(allowedTools !== undefined ? { allowedTools } : {}),
+    ...(tools !== undefined ? { tools } : {}),
+    ...(skills !== undefined ? { skills } : {}),
+    ...(plugins !== undefined ? { plugins } : {}),
   };
 }
 
@@ -113,9 +123,9 @@ interface TuiArgs {
   readonly harness: string | undefined;
   readonly model: string | undefined;
   readonly thinking: string | undefined;
-  readonly allowedTools: string | undefined;
-  readonly allowedSkills: string | undefined;
-  readonly allowedPlugins: string | undefined;
+  readonly tools: string | undefined;
+  readonly skills: string | undefined;
+  readonly plugins: string | undefined;
   readonly systemPrompt: boolean;
   readonly fullUserMsg: boolean;
   readonly omitHarnessPrompt: boolean;
@@ -153,9 +163,9 @@ async function runTui(args: TuiArgs): Promise<number> {
   if (args.harness !== undefined) argv.push("--harness", args.harness);
   if (args.model !== undefined) argv.push("--model", args.model);
   if (args.thinking !== undefined) argv.push("--thinking", args.thinking);
-  if (args.allowedTools !== undefined) argv.push("--allowed-tools", args.allowedTools);
-  if (args.allowedSkills !== undefined) argv.push("--allowed-skills", args.allowedSkills);
-  if (args.allowedPlugins !== undefined) argv.push("--allowed-plugins", args.allowedPlugins);
+  if (args.tools !== undefined) argv.push("--tools", args.tools);
+  if (args.skills !== undefined) argv.push("--skills", args.skills);
+  if (args.plugins !== undefined) argv.push("--plugins", args.plugins);
   if (args.omitHarnessPrompt) argv.push("--omit-harness-prompt");
   if (args.systemPrompt) argv.push("--system-prompt");
   if (args.fullUserMsg) argv.push("--full-user-msg");
@@ -176,9 +186,9 @@ async function run(): Promise<number> {
       harness: { type: "string" },
       model: { type: "string" },
       thinking: { type: "string" },
-      "allowed-tools": { type: "string" },
-      "allowed-skills": { type: "string" },
-      "allowed-plugins": { type: "string" },
+      tools: { type: "string" },
+      skills: { type: "string" },
+      plugins: { type: "string" },
       input: { type: "string" },
       tui: { type: "boolean", default: false },
       "omit-harness-prompt": { type: "boolean", default: false },
@@ -205,7 +215,10 @@ async function run(): Promise<number> {
     return 1;
   }
   const sourceFile = isAbsolute(file) ? file : resolve(process.cwd(), file);
-  const input = parseInput(values.input ?? args[1] ?? "");
+  // No input token → pass `undefined` (not ""), so a no-input program declared with
+  // `Program(z.void())` validates. An explicit (even empty) value is parsed as given.
+  const rawInput = values.input ?? args[1];
+  const input = rawInput === undefined ? undefined : parseInput(rawInput);
   const model =
     values.model ?? process.env.MICROFOOM_MODEL ?? "openrouter/deepseek/deepseek-v4-flash";
 
@@ -218,9 +231,9 @@ async function run(): Promise<number> {
       harness: values.harness,
       model: values.model,
       thinking: values.thinking,
-      allowedTools: values["allowed-tools"],
-      allowedSkills: values["allowed-skills"],
-      allowedPlugins: values["allowed-plugins"],
+      tools: values.tools,
+      skills: values.skills,
+      plugins: values.plugins,
       systemPrompt: values["system-prompt"],
       fullUserMsg: values["full-user-msg"],
       omitHarnessPrompt: values["omit-harness-prompt"],
@@ -240,15 +253,9 @@ async function run(): Promise<number> {
     );
     return 1;
   }
-  const allowedSkills = parseAllowedList(values["allowed-skills"]);
-  const allowedPlugins = parseAllowedList(values["allowed-plugins"]);
   const openSession =
     harnessName === "pi"
-      ? createPiOpenSession({
-          omitHarnessBasePrompt: values["omit-harness-prompt"],
-          ...(allowedSkills !== undefined ? { allowedSkills } : {}),
-          ...(allowedPlugins !== undefined ? { allowedPlugins } : {}),
-        })
+      ? createPiOpenSession({ omitHarnessBasePrompt: values["omit-harness-prompt"] })
       : makeHarness();
 
   const events: AgentEvent[] = [];
@@ -258,7 +265,12 @@ async function run(): Promise<number> {
     panel?.onEvent(event);
   };
 
-  const defaults = cliDefaults(values.thinking, parseAllowedList(values["allowed-tools"]));
+  const defaults = cliDefaults(
+    values.thinking,
+    parseList(values.tools),
+    parseList(values.skills),
+    parseList(values.plugins),
+  );
   try {
     const result = await runProgram(ProgramClass, input, {
       harnesses: { [harnessName]: openSession },

@@ -52,16 +52,16 @@ class Greeter extends Program<typeof stringSchema, string>(stringSchema) {
   }
 }
 
-/** Run Greeter, optionally with a run-level allowedTools default. */
+/** Run Greeter, optionally with a run-level tools default. */
 async function run(
   openSession: ReturnType<typeof createPiOpenSession>,
   model: string,
-  allowedTools?: readonly string[],
+  tools?: readonly string[],
 ): Promise<void> {
   await runProgram(Greeter, "x", {
     harnesses: { pi: openSession },
     model,
-    ...(allowedTools !== undefined ? { defaults: { allowedTools } } : {}),
+    ...(tools !== undefined ? { defaults: { tools } } : {}),
   });
 }
 

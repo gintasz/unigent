@@ -32,7 +32,7 @@
     "dup": "jscpd packages",
     "api": "pnpm -r --if-present run api",
     "api:check": "pnpm -r --if-present run api:check",
-    "example": "node --import tsx examples/run.ts",
+    "example": "node --import tsx examples/run.ts examples/hello.ts world",
     "cli": "node --import tsx packages/microfoom-cli/src/cli.ts",
     "link": "pnpm run build && pnpm config set global-bin-dir \"$(npm prefix -g)/bin\" && cd packages/microfoom-cli && pnpm link --global",
     "unlink": "cd packages/microfoom-cli && pnpm unlink --global",

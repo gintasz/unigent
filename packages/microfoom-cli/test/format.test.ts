@@ -2,10 +2,13 @@ import { describe, expect, it } from "vitest";
 import { fmtCost, fmtDuration, fmtSummary, fmtTokens } from "../src/format.ts";
 
 describe("format", () => {
-  it("formats durations", () => {
+  it("formats durations without milliseconds, rolling into minutes and hours", () => {
     expect(fmtDuration(undefined)).toBe("—");
-    expect(fmtDuration(820)).toBe("820ms");
-    expect(fmtDuration(12400)).toBe("12.4s");
+    expect(fmtDuration(400)).toBe("<1s");
+    expect(fmtDuration(820)).toBe("1s");
+    expect(fmtDuration(12400)).toBe("12s");
+    expect(fmtDuration(90000)).toBe("1m 30s");
+    expect(fmtDuration(3_675_000)).toBe("1h 01m");
   });
 
   it("formats cost with more precision under a cent fraction", () => {
@@ -14,8 +17,12 @@ describe("format", () => {
     expect(fmtCost(0.0023)).toBe("$0.0023");
   });
 
-  it("formats tokens", () => {
+  it("formats tokens compactly with k/M above a thousand", () => {
     expect(fmtTokens(10)).toBe("10tok");
+    expect(fmtTokens(842)).toBe("842tok");
+    expect(fmtTokens(68_901)).toBe("68.9ktok");
+    expect(fmtTokens(100_000)).toBe("0.1Mtok");
+    expect(fmtTokens(620_816)).toBe("0.6Mtok");
   });
 
   it("builds a one-line summary, omitting empty cost", () => {
@@ -31,9 +38,9 @@ describe("format", () => {
         },
         12400,
       ),
-    ).toBe("12.4s  10tok  $0.21  2 calls");
+    ).toBe("12s  10tok  $0.21  2 calls");
     expect(
       fmtSummary({ inputTokens: 0, outputTokens: 0, totalTokens: 0, calls: 0, maxCallDepth: 0 }, 5),
-    ).toBe("5ms  0tok");
+    ).toBe("<1s  0tok");
   });
 });
