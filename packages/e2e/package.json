@@ -5,6 +5,7 @@
   "type": "module",
   "devDependencies": {
     "@earendil-works/pi-ai": "0.80.2",
+    "@microfoom/claudecli-adapter": "workspace:*",
     "@microfoom/core": "workspace:*",
     "@microfoom/pi-adapter": "workspace:*"
   }

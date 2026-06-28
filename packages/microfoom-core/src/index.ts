@@ -30,10 +30,9 @@ export type {
 } from "./decorators.js";
 export { foom } from "./decorators.js";
 // Error taxonomy (F7)
-export type { FoomtimeErrorOptions } from "./errors.js";
+export type { FoomtimeErrorOptions, RepairChannel } from "./errors.js";
 export {
   FoomtimeAbortError,
-  FoomtimeArgError,
   FoomtimeBudgetExceededError,
   FoomtimeCallDepthError,
   FoomtimeCancelledError,
@@ -46,11 +45,9 @@ export {
   FoomtimeHarnessUnavailableError,
   FoomtimeInputError,
   FoomtimeRepairExhaustedError,
-  FoomtimeReturnError,
   FoomtimeThrowError,
   FoomtimeTimeoutError,
   FoomtimeTokenLimitExceededError,
-  FoomtimeValidationError,
 } from "./errors.js";
 export type {
   AgentCancellation,

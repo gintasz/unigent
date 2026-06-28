@@ -7,11 +7,18 @@ All failures surface at the Promise/exception boundary as subclasses of
 `FoomtimeError`. Catch the base to handle everything, or a specific subclass to
 react to one cause. Never parse an error message.
 
+Repairable agent faults — bad `foom_call` arguments, a call to an unexposed
+method, or a `foom_return` whose value fails its schema (or never comes) — are
+**not** thrown when they happen. The runtime feeds each back to the model in-band
+and re-prompts, up to `repairAttempts`. They surface as a single exception only
+once repair is exhausted: `FoomtimeRepairExhaustedError`, whose `.channel`
+(`"args"` | `"return"` | `"dispatch"`) names the fault.
+
 ```ts
 import {
   FoomtimeError,
   FoomtimeThrowError,
-  FoomtimeValidationError,
+  FoomtimeRepairExhaustedError,
   FoomtimeBudgetExceededError,
 } from "@microfoom/core";
 
@@ -23,8 +30,9 @@ try {
     console.error(err.code, err.message);
   } else if (err instanceof FoomtimeBudgetExceededError) {
     // Hit maxBudgetUsd.
-  } else if (err instanceof FoomtimeValidationError) {
-    // The agent's output could not be repaired in time.
+  } else if (err instanceof FoomtimeRepairExhaustedError) {
+    // The agent's output couldn't be repaired in time; err.channel says which fault.
+    console.error("repair exhausted:", err.channel);
   } else if (err instanceof FoomtimeError) {
     // Anything else in the taxonomy.
   }
@@ -36,21 +44,18 @@ try {
 ```
 FoomtimeError
 ├─ FoomtimeThrowError              deliberate foom_throw (always carries `code`)
-├─ FoomtimeValidationError         repairable; base for the three below
-│  ├─ FoomtimeArgError             bad foom_call args
-│  ├─ FoomtimeReturnError          bad/missing foom_return
-│  └─ FoomtimeDispatchError        unexposed/unknown method
 ├─ FoomtimeAbortError              run ended early
 │  ├─ FoomtimeTimeoutError         exceeded maxTurnDuration / maxProgramDuration
 │  └─ FoomtimeCancelledError       aborted via signal / .abort()
 ├─ FoomtimeBudgetExceededError     exceeded maxBudgetUsd
 ├─ FoomtimeTokenLimitExceededError exceeded maxOutputTokens
 ├─ FoomtimeCallDepthError          exceeded maxCallDepth
-├─ FoomtimeRepairExhaustedError    too many consecutive validation failures
+├─ FoomtimeRepairExhaustedError    repair loop gave up; `.channel` names the fault
 ├─ FoomtimeHarnessError            harness/backend boundary failure
 │  ├─ FoomtimeHarnessUnavailableError  transient — retryable
 │  └─ FoomtimeHarnessRejectedError     non-transient
 ├─ FoomtimeConfigError             bad config (no such model, invalid cap, …)
 ├─ FoomtimeInputError              /run input failed the program's input schema
+├─ FoomtimeDispatchError           exposed method has no implementation (a defect)
 └─ FoomtimeConcurrencyError        overlapping turns on one session
 ```

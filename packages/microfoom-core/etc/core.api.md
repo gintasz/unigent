@@ -199,10 +199,6 @@ export class FoomtimeAbortError extends FoomtimeError {
 }
 
 // @public
-export class FoomtimeArgError extends FoomtimeValidationError {
-}
-
-// @public
 export class FoomtimeBudgetExceededError extends FoomtimeError {
 }
 
@@ -223,7 +219,7 @@ export class FoomtimeConfigError extends FoomtimeError {
 }
 
 // @public
-export class FoomtimeDispatchError extends FoomtimeValidationError {
+export class FoomtimeDispatchError extends FoomtimeError {
 }
 
 // @public
@@ -278,10 +274,9 @@ export abstract class FoomtimeProgram<I = string[], R = unknown> {
 
 // @public
 export class FoomtimeRepairExhaustedError extends FoomtimeError {
-}
-
-// @public
-export class FoomtimeReturnError extends FoomtimeValidationError {
+    constructor(message: string, channel: RepairChannel, options?: FoomtimeErrorOptions);
+    // (undocumented)
+    readonly channel: RepairChannel;
 }
 
 // @public
@@ -297,10 +292,6 @@ export class FoomtimeTimeoutError extends FoomtimeAbortError {
 
 // @public
 export class FoomtimeTokenLimitExceededError extends FoomtimeError {
-}
-
-// @public
-export class FoomtimeValidationError extends FoomtimeError {
 }
 
 // @public
@@ -362,6 +353,9 @@ export type OpenSession = (options: HarnessSessionOptions) => Promise<HarnessSes
 
 // @public
 export function Program<S extends StandardSchemaV1, R = unknown>(input: S): abstract new () => FoomtimeProgram<StandardSchemaV1.InferOutput<S>, R>;
+
+// @public
+export type RepairChannel = "args" | "return" | "dispatch";
 
 // @public
 export function runProgram<P extends FoomtimeProgram<never, unknown>>(ProgramClass: abstract new () => P, rawInput: unknown, options: RunProgramOptions): Promise<Awaited<ReturnType<P["main"]>>>;

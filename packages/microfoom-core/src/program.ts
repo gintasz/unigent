@@ -806,10 +806,14 @@ function makeContext<P extends object>(
   runtime: Runtime,
   options: AgentOptions,
 ): AgentProgramContext<P> {
+  // Resolve the model from the full cascade (defaults → class → options), like
+  // makeScope/makeSession do — so a per-turn `this.agent.with({ model })` (or
+  // `.with({ harness, model })`) actually re-targets the stateless turn's session.
+  // Threading runtime.defaults.model here instead silently dropped the override.
   const run = makeRun(
     runtime,
     options,
-    statelessSource(runtime, runtime.defaults.model ?? "", options),
+    statelessSource(runtime, optionsModel(runtime, options), options),
   );
   const context: AgentProgramContext<P> & TraceContext = {
     do: run.do,
@@ -844,8 +848,8 @@ function makeContext<P extends object>(
  * @returns The value `main` resolves to.
  * @throws {@link FoomtimeInputError} when `rawInput` fails the input schema.
  * @throws {@link FoomtimeConfigError} on bad config (e.g. no model, unknown harness).
- * @throws {@link FoomtimeValidationError} when the agent's output can't be repaired,
- *   {@link FoomtimeThrowError} on a deliberate `foom_throw`, and other
+ * @throws {@link FoomtimeRepairExhaustedError} when the agent's output can't be
+ *   repaired, {@link FoomtimeThrowError} on a deliberate `foom_throw`, and other
  *   {@link FoomtimeError} subclasses on caps/aborts/harness failures (F7).
  * @example
  * ```ts

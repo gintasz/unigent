@@ -101,11 +101,14 @@ Routing across harnesses means registering more than one, so launch the program 
 // run.ts
 import { runProgram } from "@microfoom/core";
 import { createPiOpenSession } from "@microfoom/pi-adapter";
+import { createClaudeCliOpenSession } from "@microfoom/claudecli-adapter";
 import Researcher from "./researcher.ts";
 
 const report = await runProgram(Researcher, { topic: "tidal energy" }, {
-  // Each harness can carry its own model, auth, tools, or runtime.
-  harnesses: { fast: createPiOpenSession(), deep: createPiOpenSession() },
+  harnesses: {
+    fast: createPiOpenSession(), // a model via pi
+    deep: createClaudeCliOpenSession(), // a different runtime — the Claude Code CLI
+  },
   defaultHarness: "fast",
   sourceFile: "./researcher.ts", // lets foom_inspect derive parameter schemas
 });
