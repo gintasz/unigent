@@ -31,6 +31,8 @@ const site = z.string();
 @foom.config({
   model: process.env.MICROFOOM_MODEL ?? "openrouter/deepseek/deepseek-v4-flash",
   thinking: "low",
+  // No harness tools — the program drives everything via FOOM (foom_return / score).
+  allowedTools: [],
 })
 export default class Audit extends Program(site) {
   async main(target: string): Promise<string> {
