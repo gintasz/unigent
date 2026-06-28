@@ -25,8 +25,20 @@ Microfoom is the toolkit for writing coordination scripts.
 
 - **Cross-harness, first-class** — compose agents running on different model harnesses in one script.
 - **Lean & ergonomic API** — a handful of primitives; as easy to read as it is to write.
+- **Schema-validated** — structured turns return typed, validated values; malformed output is auto-repaired, then fails loudly.
 - **Traced out of the box** — every span, turn, and token is captured as a tree you can inspect, for the terminal UI or your own exporter.
-- **Schema-validated** — structured turns return typed, validated values; malformed output is auto-repaired.
+
+## Install
+
+Requires **Node ≥ 24**.
+
+```sh
+# Library + harness adapters
+npm install @microfoom/core @microfoom/pi-adapter @microfoom/claudecli-adapter
+
+# The CLI runner — provides the `microfoom` command
+npm install -g @microfoom/cli
+```
 
 ## Example
 
@@ -57,55 +69,115 @@ export default class extends Program(Input) {
           .prose`Answer concisely, calling headlines() if it helps: ${q}`),
     );
 
-    // An act turn (`do`): send the agent an instruction and avoid wasting tokens on a yapping response that you
-    // don't need anyway. the agent is automatically instructed to call foom_return tool after the work is done.
-    await this.agent.do`Save each finding individually with "note" method via foom_call tool: ${findings.join("\n")}`;
+    // An act turn (`do`): run instructions for their side effects, return nothing —
+    // no tokens wasted on a response you don't read. The agent is told to call
+    // foom_return with no arguments once the work is done.
+    await this.agent.do`Save each finding with the note() method via foom_call: ${findings.join("\n")}`;
 
     // Structured, schema-validated result — typed the moment you await it.
     return this.agent.value(Report)`
       Write a report on ${topic} from those findings, then foom_return it.`;
   }
 
-  // Exposed method for foom_call (silent) — callable, but the agent isn't aware of it unless you tell the name of the method.
-  // Agent must call foom_inspect to learn the arguments signature.
+  // Silent expose: callable via foom_call, but the agent doesn't know it exists
+  // until you name it in your prompt. It must foom_inspect to learn the argument signature before calling.
   @foom.expose
   async note(text: string): Promise<void> {
     await appendFile("notes.md", `- ${text}\n`);
   }
 
-  // Exposed method for foom_call (announced) — the agent is told it exists in system prompt.
-  // Agent must call foom_inspect to learn the arguments signature.
+  // Announced expose: the agent is told the method exists in its system prompt.
+  // It must foom_inspect to learn the argument signature before calling.
   @foom.expose({ announcement: "Fetch recent headlines for a query." })
   async headlines(query: string): Promise<string[]> {
     return (await fetch(`https://news.api/search?q=${query}`)).json();
   }
 
-  // Exposed agent tool — registers like any other agent tool inside the harness.
-  @foom.expose({ tool: { description: "Such recent headlines for a query" } })
-  async headlines(query: string): Promise<string[]> {
-    return (await fetch(`https://news.api/search?q=${query}`)).json();
+  // Tool expose: registers as a first-class agent tool inside the harness.
+  @foom.expose({ tool: { description: "Search the web for a query." } })
+  async searchWeb(query: string): Promise<string[]> {
+    return (await fetch(`https://search.api/q?query=${query}`)).json();
   }
 }
 ```
 
-## Agent configuration options
-model, max budget, etc, list all
+## Turn modes
 
-Harness: explain we have 2 adapter now: pi (uses agent sdk), claude code cli (uses headless `claude` cli with `-p` arg)
+`this.agent` drives the model through three modes:
 
-## Control operations given to agent
+- **`value(schema)`** — a structured turn. The agent must `foom_return` a value, validated against your Standard Schema; the awaited result is typed.
+- **`prose`** — a freeform natural-language turn. `await` for the full text, or `for await` to stream chunks.
+- **`do`** — an act turn: run instructions for their side effects and resolve to `void`. The cheapest mode — no schema, no final message.
 
-An agent running inside a microfoom runtime interacts with it through 4 native tools it is given.
+`.with({ ... })` layers per-call config; `.session()` opens a stateful conversation (shared transcript, `.fork()` to branch); `.scope("name")` (via `@microfoom/core/trace`) groups turns in the trace tree.
 
-- `foom_call(method_name, args)` — invoke one of your `@foom.expose`d methods.
+## Control operations given to the agent
+
+An agent running inside a microfoom runtime interacts with it through 4 native tools — surfaced as structured function calls.
+
 - `foom_return(value)` — hand back the turn's result, validated against your schema.
-- `foom_throw(message, code?)` — abort the turn with a deliberate error.
+- `foom_call(method_name, args)` — invoke one of your `@foom.expose`d methods.
+- `foom_throw(message, code?)` — abort the turn with a deliberate, typed error.
 - `foom_inspect(method_name)` — look up an exposed method's parameter schema before calling it.
 
-Other than these 4 extra tools, and few lines added to agent's system prompt, agent, spawned by coordination script is no different than an agent spawned by a cli.
+Other than these 4 tools and a few lines added to its system prompt, an agent spawned by a coordination script is no different from one spawned by a CLI, because it uses the same default configuration.
 
+## Configuration
+
+Set config with `@foom.config({ ... })` on a class or method, with `.with({ ... })` per call, or as run-level defaults. Scopes cascade widest → narrowest (**run defaults → class → method → per-call**), merging by a rule fixed per option kind: **caps tighten only**, **`systemPrompt` composes**, **everything else is nearest-scope-wins**.
+
+| Option | Meaning |
+| --- | --- |
+| `model` | Model id as `"provider/id"`. Opaque to the core; the harness resolves it. Required somewhere in the cascade. |
+| `harness` | Which registered harness runs the turn. Required somewhere in the cascade. |
+| `thinking` | Reasoning effort: `"low"` / `"medium"` / `"high"`, or a provider-specific raw string. |
+| `tools` | Harness tools the model may use (tri-state: `undefined` = all, `[]` = none, list = only those). FOOM tools are always available. |
+| `skills` | Skills the harness advertises (tri-state). pi only. |
+| `plugins` | Plugins/extensions the harness loads (tri-state). pi only. |
+| `retries` | Retries on a *retryable* harness error. |
+| `repairAttempts` | Validation failures tolerated before giving up (default `3`). |
+| `systemPrompt` | This scope's contribution: `{ append }` accumulates, `{ replace }` resets the base. |
+| `maxBudgetUsd` | Cost ceiling; exceeding aborts. Tighten-only. |
+| `maxOutputTokens` | Output-token ceiling. Tighten-only. |
+| `maxCallDepth` | Max `foom_call` re-entry depth. Tighten-only. |
+| `maxTurnDuration` | Wall-clock ceiling for one turn (e.g. `"30s"`). Tighten-only. |
+
+A whole-program wall-clock ceiling is a `static maxProgramDuration` on the program class (e.g. `"5m"`).
+
+## Harnesses
+
+A harness is the model-loop adapter a turn runs on. Microfoom ships two:
+
+- **pi** ([`@microfoom/pi-adapter`](packages/pi-adapter)) — runs on the [pi](https://www.npmjs.com/package/@earendil-works/pi-agent-core) agent SDK; resolves model/auth from `~/.pi`, and supports skills, plugins, and session `fork()`.
+- **claudecli** ([`@microfoom/claudecli-adapter`](packages/claudecli-adapter)) — drives the headless `claude` CLI (`claude -p`) via an in-process MCP server.
+
+Register the harnesses you want under names, then select per scope via `@foom.config({ harness })` / `.with({ harness })`:
+
+```ts
+import { runProgram } from "@microfoom/core";
+import { createPiOpenSession } from "@microfoom/pi-adapter";
+import { createClaudeCliOpenSession } from "@microfoom/claudecli-adapter";
+
+const report = await runProgram(MyProgram, { topic: "tides" }, {
+  harnesses: {
+    pi: createPiOpenSession(),
+    claudecli: createClaudeCliOpenSession(),
+  },
+  defaultHarness: "pi",
+  model: "openrouter/deepseek/deepseek-v4-flash",
+  sourceFile: "./my-program.ts", // required for foom_call parameter derivation
+});
+```
 
 ## Run it
+
+The CLI runs a program file with zero boilerplate — model/auth resolved from the pi harness, the program result on stdout, observability on stderr.
+
+```sh
+microfoom run ./researcher.ts "tides"
+microfoom run ./researcher.ts "tides" --json        # result as JSON
+microfoom run ./researcher.ts "tides" --harness fake # offline, deterministic, no model
+```
 
 Add `--tui` to open a two-pane inspector: the live span tree on the left, the agent's transcript for the selected span on the right.
 
@@ -118,9 +190,10 @@ microfoom run ./researcher.ts --tui
 <!-- Replace with a screenshot of `microfoom run … --tui`. -->
 <img src="https://github.com/gintasz/microfoom/raw/main/assets/tui.png" alt="microfoom terminal UI" width="820" />
 
-You can also run in it programmatically, check examples/run.ts.
-
 </div>
 
-# License
-??
+You can also run programs programmatically — see [examples/run.ts](examples/run.ts) and the other [examples](examples).
+
+## License
+
+[MIT](LICENSE) © Gintas Zenevskis
