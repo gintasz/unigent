@@ -52,7 +52,7 @@ import {
 } from "@microfoom/core";
 import { Type } from "typebox";
 
-export const PI_HARNESS_VERSION = "0.0.0";
+export const PI_HARNESS_VERSION = "0.1.0";
 
 const PI_THINKING: ReadonlySet<string> = new Set([
   "off",

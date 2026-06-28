@@ -30,7 +30,7 @@ export default function HomePage() {
           microfoom
         </h1>
         <p className="max-w-xl text-lg text-fd-muted-foreground">
-          Your code orchestrates. The model does only the fuzzy work.
+          Coordination a single prompt can&apos;t express.
         </p>
         <div className="flex flex-wrap items-center justify-center gap-3">
           <Link

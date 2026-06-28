@@ -31,7 +31,7 @@ import { createTurnReader } from "./stream.js";
 // sandboxing, a different binary path) via ClaudeCliSessionOptions.processFactory.
 export type { ClaudeProcess, ClaudeProcessFactory, ClaudeSpec } from "./process.js";
 
-export const CLAUDECLI_HARNESS_VERSION = "0.0.0";
+export const CLAUDECLI_HARNESS_VERSION = "0.1.0";
 
 /** Default MCP server name → tool prefix `mcp__foom__`. */
 const DEFAULT_SERVER_NAME = "foom";

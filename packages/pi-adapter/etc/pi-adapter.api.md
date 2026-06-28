@@ -14,7 +14,7 @@ import { StreamFn } from '@earendil-works/pi-agent-core';
 export function createPiOpenSession(options?: PiSessionOptions): OpenSession;
 
 // @public (undocumented)
-export const PI_HARNESS_VERSION = "0.0.0";
+export const PI_HARNESS_VERSION = "0.1.0";
 
 // @public
 export interface PiSessionOptions {

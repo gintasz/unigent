@@ -1,8 +1,37 @@
 {
   "name": "@microfoom/cli",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0",
   "type": "module",
+  "description": "CLI + TUI runner for microfoom coordination programs.",
+  "keywords": [
+    "microfoom",
+    "agents",
+    "llm",
+    "cli",
+    "tui",
+    "orchestration",
+    "typescript"
+  ],
+  "license": "MIT",
+  "author": "Gintas Zenevskis <gintas.zenevskis@gmail.com>",
+  "homepage": "https://gintasz.github.io/microfoom/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gintasz/microfoom.git",
+    "directory": "packages/microfoom-cli"
+  },
+  "bugs": "https://github.com/gintasz/microfoom/issues",
+  "engines": {
+    "node": ">=24"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "bin": {
     "microfoom": "./dist/cli.js"
   },

@@ -2,6 +2,7 @@ node_modules/
 dist/
 coverage/
 
+
 # Fumadocs docs site (docs-website/)
 docs-website/.next/
 docs-website/out/

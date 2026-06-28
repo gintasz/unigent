@@ -7,7 +7,7 @@
 import { OpenSession } from '@microfoom/core';
 
 // @public (undocumented)
-export const CLAUDECLI_HARNESS_VERSION = "0.0.0";
+export const CLAUDECLI_HARNESS_VERSION = "0.1.0";
 
 // @public (undocumented)
 export interface ClaudeCliSessionOptions {

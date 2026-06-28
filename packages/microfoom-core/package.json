@@ -1,8 +1,37 @@
 {
   "name": "@microfoom/core",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0",
   "type": "module",
+  "description": "Typed building blocks for coordination engineering: orchestrate many agents across model harnesses from durable TypeScript.",
+  "keywords": [
+    "agents",
+    "llm",
+    "ai",
+    "orchestration",
+    "coordination",
+    "agent-framework",
+    "typescript"
+  ],
+  "license": "MIT",
+  "author": "Gintas Zenevskis <gintas.zenevskis@gmail.com>",
+  "homepage": "https://gintasz.github.io/microfoom/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gintasz/microfoom.git",
+    "directory": "packages/microfoom-core"
+  },
+  "bugs": "https://github.com/gintasz/microfoom/issues",
+  "engines": {
+    "node": ">=24"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",

@@ -1,0 +1,59 @@
+name: Release
+
+# Changesets release flow. On every push to main the action opens/updates a
+# "Version Packages" PR that accumulates pending changesets; merging that PR (or a
+# manual workflow_dispatch with no pending changesets) publishes — and ONLY the
+# packages a changeset bumped, plus internal dependents whose dependency range moved.
+#
+# Auth supports both modes in one workflow:
+#   - Trusted Publishing (OIDC): `id-token: write` + provenance. Engages automatically
+#     once a trusted publisher is configured per package on npmjs.com (no secret).
+#   - NPM_TOKEN: classic granular automation token in repo secrets — the active path
+#     until/unless OIDC is configured. Provenance is emitted either way.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency: ${{ github.workflow }}-${{ github.ref }}
+
+permissions:
+  contents: write
+  pull-requests: write
+  id-token: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: "https://registry.npmjs.org"
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm run build
+
+      - run: pnpm run test
+
+      - name: Create release PR or publish changed packages
+        uses: changesets/action@v1
+        with:
+          version: pnpm run version-packages
+          publish: pnpm run release
+          title: "chore: version packages"
+          commit: "chore: version packages"
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_CONFIG_PROVENANCE: true

@@ -93,6 +93,9 @@ ellipsize
 streamable
 fumadocs
 gintasz
+Gintas
+Zenevskis
+npmjs
 prebuild
 predev
 Mtok

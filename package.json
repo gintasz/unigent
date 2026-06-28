@@ -1,8 +1,26 @@
 {
   "name": "microfoom",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
+  "description": "Agentic coordination engineering in TypeScript: compose many agents, sessions, and model harnesses into one typed program.",
+  "keywords": [
+    "agents",
+    "llm",
+    "ai",
+    "orchestration",
+    "coordination",
+    "agent-framework",
+    "typescript"
+  ],
+  "license": "MIT",
+  "author": "Gintas Zenevskis <gintas.zenevskis@gmail.com>",
+  "homepage": "https://gintasz.github.io/microfoom/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gintasz/microfoom.git"
+  },
+  "bugs": "https://github.com/gintasz/microfoom/issues",
   "packageManager": "pnpm@10.14.0",
   "engines": {
     "node": ">=24"
@@ -35,6 +53,10 @@
     "docs:check": "typedoc --emit none --treatWarningsAsErrors --tsconfig packages/microfoom-core/tsconfig.json --validation.invalidLink --validation.notExported packages/microfoom-core/src/index.ts packages/microfoom-core/src/trace/index.ts",
     "example": "node --import tsx examples/run.ts examples/hello.ts world",
     "cli": "node --import tsx packages/microfoom-cli/src/cli.ts",
+    "changeset": "changeset",
+    "version-packages": "changeset version",
+    "sync-docs": "node scripts/sync-package-docs.mjs",
+    "release": "pnpm run build && node scripts/sync-package-docs.mjs && changeset publish && node scripts/sync-package-docs.mjs --clean",
     "link": "pnpm run build && pnpm config set global-bin-dir \"$(npm prefix -g)/bin\" && cd packages/microfoom-cli && pnpm link --global",
     "unlink": "cd packages/microfoom-cli && pnpm unlink --global",
     "check": "pnpm run typecheck && pnpm run format:check && pnpm run lint && pnpm run arch && pnpm run ast && pnpm run spell && pnpm run deps:check && pnpm run dead && pnpm run dup && pnpm run build && pnpm run api:check && pnpm run docs:check && pnpm run test",
@@ -43,7 +65,7 @@
   "devDependencies": {
     "@ast-grep/cli": "0.44.0",
     "@biomejs/biome": "2.5.1",
-    "@eslint/js": "10.0.1",
+    "@changesets/cli": "2.31.0",
     "@microfoom/core": "workspace:*",
     "@microfoom/pi-adapter": "workspace:*",
     "@microsoft/api-extractor": "7.58.9",

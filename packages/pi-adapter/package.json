@@ -1,8 +1,36 @@
 {
   "name": "@microfoom/pi-adapter",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0",
   "type": "module",
+  "description": "Microfoom harness adapter for the Pi agent SDK",
+  "keywords": [
+    "microfoom",
+    "agents",
+    "llm",
+    "harness",
+    "pi-agent",
+    "typescript"
+  ],
+  "license": "MIT",
+  "author": "Gintas Zenevskis <gintas.zenevskis@gmail.com>",
+  "homepage": "https://gintasz.github.io/microfoom/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gintasz/microfoom.git",
+    "directory": "packages/pi-adapter"
+  },
+  "bugs": "https://github.com/gintasz/microfoom/issues",
+  "engines": {
+    "node": ">=24"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",

@@ -2,8 +2,9 @@
 // barrel (A2) — `export *` is banned (L3); re-exports are explicit.
 
 /**
- * `@microfoom/core` — typed building blocks for coordination engineering: your
- * TypeScript orchestrates and the model does only the fuzzy work.
+ * `@microfoom/core` — typed building blocks for coordination engineering:
+ * coordination a single prompt can't express. Your TypeScript owns the control
+ * flow; the model is invoked only for the genuinely fuzzy parts.
  *
  * Write a program by extending {@link Program} and driving `this.agent`
  * ({@link AgentRun}: `do` / `prose` / `value`); expose methods to the agent with
@@ -14,7 +15,7 @@
  */
 
 /** The version of `@microfoom/core` this build was published at. */
-export const CORE_VERSION = "0.0.0";
+export const CORE_VERSION = "0.1.0";
 
 // Config + options
 export type { AgentConfig, Duration, SystemPrompt, ThinkingLevel } from "./config.js";
