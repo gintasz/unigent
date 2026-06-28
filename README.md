@@ -7,8 +7,6 @@
 
 **Typed building blocks for agentic coordination engineering.**
 
-Your code orchestrates. The model does only the fuzzy work.
-
 [**Documentation**](https://gintasz.github.io/microfoom/)
 
 </div>
@@ -23,10 +21,10 @@ Two ideas lead here. **Loop engineering** — hand-rolling the run loop that dri
 
 Both put real control flow around the model instead of trusting one prompt. Coordination engineering goes further. A **coordination script** is durable, typed TypeScript — kept, versioned, reused — that composes multiple agents, parallel sessions, and even **different model harnesses** into one program: coordination a single-harness dynamic workflow can't reach.
 
-microfoom is the toolkit for writing coordination scripts.
+Microfoom is the toolkit for writing coordination scripts.
 
 - **Cross-harness, first-class** — compose agents running on different model harnesses in one script.
-- **Small, clean API** — a handful of primitives; as easy to read as it is to write.
+- **Lean & ergonomic API** — a handful of primitives; as easy to read as it is to write.
 - **Traced out of the box** — every span, turn, and token is captured as a tree you can inspect, for the terminal UI or your own exporter.
 - **Schema-validated** — structured turns return typed, validated values; malformed output is auto-repaired.
 
@@ -90,8 +88,10 @@ export default class extends Program(Input) {
 }
 ```
 
-## Supported harnesses
-pi (uses agent sdk), claude code cli (uses headless `claude` cli with `-p` arg)
+## Agent configuration options
+model, max budget, etc, list all
+
+Harness: explain we have 2 adapter now: pi (uses agent sdk), claude code cli (uses headless `claude` cli with `-p` arg)
 
 ## Control operations given to agent
 
@@ -118,4 +118,9 @@ microfoom run ./researcher.ts --tui
 <!-- Replace with a screenshot of `microfoom run … --tui`. -->
 <img src="https://github.com/gintasz/microfoom/raw/main/assets/tui.png" alt="microfoom terminal UI" width="820" />
 
+You can also run in it programmatically, check examples/run.ts.
+
 </div>
+
+# License
+??
