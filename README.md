@@ -66,17 +66,17 @@ export default class extends Program(Input) {
       questions.map((q) =>
         this.agent
           .with({ harness: "claudecli", model: "sonnet", thinking: "high" })
-          .prose`Answer concisely, calling headlines() if it helps: ${q}`),
+          .prose`Answer concisely, call "headlines" method via foom_call tool if it helps: ${q}`),
     );
 
     // An act turn (`do`): run instructions for their side effects, return nothing —
     // no tokens wasted on a response you don't read. The agent is told to call
     // foom_return with no arguments once the work is done.
-    await this.agent.do`Save each finding with the note() method via foom_call: ${findings.join("\n")}`;
+    await this.agent.do`Save each finding with the "note" method via foom_call tool: ${findings.join("\n")}`;
 
     // Structured, schema-validated result — typed the moment you await it.
     return this.agent.value(Report)`
-      Write a report on ${topic} from those findings, then foom_return it.`;
+      Write a report on ${topic} from those findings, then provide it via foom_return tool.`;
   }
 
   // Silent expose: callable via foom_call, but the agent doesn't know it exists
