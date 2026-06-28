@@ -106,10 +106,39 @@ const isBudgetOrUnenforceable = (
 
 // ─── schemas + programs (the fixture subjects) ─────────────────────────────────
 
-const stringSchema = makeStandardSchema<string>((input) =>
-  typeof input === "string" ? { value: input } : { issues: [{ message: "expected a string" }] },
+// Attach the optional Standard JSON Schema interface (`~standard.jsonSchema.input`)
+// so foom_return advertises the return SHAPE to the model. Without it the model
+// sees an open schema and a live model may return the right value as the wrong
+// JSON type (e.g. the string "42" against a number schema), forcing pointless
+// repair. zod/valibot/arktype provide this for real programs; these bare test
+// validators declare it explicitly so the live tier is model-deterministic.
+function withJsonSchema<S extends { readonly "~standard": object }>(
+  schema: S,
+  json: Record<string, unknown>,
+): S {
+  return { ...schema, "~standard": { ...schema["~standard"], jsonSchema: { input: () => json } } };
+}
+
+const stringSchema = withJsonSchema(
+  makeStandardSchema<string>((input) =>
+    typeof input === "string" ? { value: input } : { issues: [{ message: "expected a string" }] },
+  ),
+  { type: "string" },
 );
-const numberSchema = makeStandardSchema<number>((input) =>
+const numberSchema = withJsonSchema(
+  makeStandardSchema<number>((input) =>
+    typeof input === "number" ? { value: input } : { issues: [{ message: "expected a number" }] },
+  ),
+  { type: "number" },
+);
+
+// A number schema that advertises NO JSON schema (open). Used only by the repair
+// fixtures, which deliberately feed invalid (non-number) returns: the value must
+// reach core's Standard Schema validator to be rejected there. With a typed schema
+// a harness that pre-validates tool args (pi-agent-core) would reject the bad value
+// itself, never exercising core's repair path. Real programs carry a real schema —
+// these fixtures isolate the open-schema repair case on purpose.
+const looseNumberSchema = makeStandardSchema<number>((input) =>
   typeof input === "number" ? { value: input } : { issues: [{ message: "expected a number" }] },
 );
 
@@ -125,6 +154,14 @@ class TextProgram extends Program<typeof stringSchema, string>(stringSchema) {
 class ValueProgram extends Program<typeof stringSchema, number>(stringSchema) {
   async main(): Promise<number> {
     return await this.agent.value(numberSchema)`Return the integer 42 via foom_return.`;
+  }
+}
+
+// Same as ValueProgram but over the open (untyped) schema — the subject of the
+// repair fixtures, which script invalid returns that must reach core's validator.
+class RepairProgram extends Program<typeof stringSchema, number>(stringSchema) {
+  async main(): Promise<number> {
+    return await this.agent.value(looseNumberSchema)`Return a number via foom_return.`;
   }
 }
 
@@ -316,7 +353,7 @@ export const fixtures: readonly Fixture[] = [
       callTool(CONTROL_TOOLS.return, { value: 5 }),
     ],
     async exec(ctx) {
-      const out = await runProgram(ValueProgram, "x", base(ctx));
+      const out = await runProgram(RepairProgram, "x", base(ctx));
       assert(out === 5, `expected the repaired value 5, got ${out}`);
     },
   },
@@ -330,7 +367,7 @@ export const fixtures: readonly Fixture[] = [
       callTool(CONTROL_TOOLS.return, { value: "nope" }),
     ],
     async exec(ctx) {
-      await rejects(() => runProgram(ValueProgram, "x", base(ctx)), isRepairExhausted, "repair");
+      await rejects(() => runProgram(RepairProgram, "x", base(ctx)), isRepairExhausted, "repair");
     },
   },
   {
@@ -345,7 +382,7 @@ export const fixtures: readonly Fixture[] = [
     async exec(ctx) {
       await rejects(
         () =>
-          runProgram(ValueProgram, "x", {
+          runProgram(RepairProgram, "x", {
             ...base(ctx),
             defaults: { allowedTools: [], repairAttempts: 1 },
           }),
@@ -364,7 +401,7 @@ export const fixtures: readonly Fixture[] = [
       callTool(CONTROL_TOOLS.return, { value: 5 }),
     ],
     async exec(ctx) {
-      const out = await runProgram(ValueProgram, "x", {
+      const out = await runProgram(RepairProgram, "x", {
         ...base(ctx),
         defaults: { allowedTools: [], repairAttempts: 1 },
       });

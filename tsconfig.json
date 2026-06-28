@@ -3,6 +3,7 @@
   "references": [
     { "path": "./packages/microfoom-core" },
     { "path": "./packages/pi-adapter" },
+    { "path": "./packages/claudecli-adapter" },
     { "path": "./packages/microfoom-cli" }
   ]
 }

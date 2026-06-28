@@ -69,11 +69,20 @@ importers:
         specifier: 4.4.3
         version: 4.4.3
 
+  packages/claudecli-adapter:
+    dependencies:
+      '@microfoom/core':
+        specifier: workspace:*
+        version: link:../microfoom-core
+
   packages/e2e:
     devDependencies:
       '@earendil-works/pi-ai':
         specifier: 0.80.2
         version: 0.80.2(ws@8.21.0)(zod@4.4.3)
+      '@microfoom/claudecli-adapter':
+        specifier: workspace:*
+        version: link:../claudecli-adapter
       '@microfoom/core':
         specifier: workspace:*
         version: link:../microfoom-core

@@ -5,6 +5,12 @@ foomcall
 foomreturn
 foomthrow
 foominspect
+claudecli
+foomulator
+foomy
+streamable
+sandboxing
+basenames
 subagent
 subagents
 earendil
