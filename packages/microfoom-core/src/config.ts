@@ -39,7 +39,7 @@ export interface AgentConfig {
    *  for stateless turns (each opens a fresh session). */
   skills?: readonly string[];
   /** The plugins the harness loads this scope (pi calls these "extensions"; opaque
-   *  names). Same tri-state + session timing as {@link skills}. */
+   *  names). Same tri-state + session timing as {@link AgentConfig.skills}. */
   plugins?: readonly string[];
   thinking?: ThinkingLevel;
   retries?: number;

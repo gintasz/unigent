@@ -248,13 +248,6 @@ function composeSystemPrompt(base: string | undefined, programPrompt: string): s
   return base !== undefined && base.length > 0 ? `${base}\n\n${programPrompt}` : programPrompt;
 }
 
-/**
- * Build an OpenSession backed by pi. Resolves models + auth from ~/.pi and obtains
- * pi's configured stream function from `createAgentSession` (done once, lazily).
- * Each microfoom turn drives a pi `Agent` whose loop runs the FOOM tools; a
- * `session()` reuses one Agent (continued transcript), a stateless turn opens a
- * fresh one. Pass the result to runProgram's `openSession`.
- */
 /** A plugin's stable identifier for `allowedPlugins` matching: pi's source name,
  *  falling back to the extension file's basename. */
 function pluginName(ext: Extension): string {
@@ -314,6 +307,13 @@ function runtimeKey(
   return `${ser(allowedSkills)}|${ser(allowedPlugins)}`;
 }
 
+/**
+ * Build an OpenSession backed by pi. Resolves models + auth from ~/.pi and obtains
+ * pi's configured stream function from `createAgentSession` (done once, lazily).
+ * Each microfoom turn drives a pi `Agent` whose loop runs the FOOM tools; a
+ * `session()` reuses one Agent (continued transcript), a stateless turn opens a
+ * fresh one. Pass the result to runProgram's `openSession`.
+ */
 export function createPiOpenSession(options: PiSessionOptions = {}): OpenSession {
   const logFile = options.logFile ?? process.env.MICROFOOM_LOG;
 
