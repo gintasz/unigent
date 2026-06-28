@@ -1,35 +1,35 @@
 import { describe, expect, it } from "vitest";
 import {
-  FoomtimeArgError,
   FoomtimeCancelledError,
+  FoomtimeDispatchError,
   FoomtimeError,
   FoomtimeHarnessRejectedError,
   FoomtimeHarnessUnavailableError,
-  FoomtimeReturnError,
+  FoomtimeRepairExhaustedError,
   FoomtimeThrowError,
   FoomtimeTimeoutError,
-  FoomtimeValidationError,
 } from "../src/index.ts";
 
 describe("error taxonomy (F7)", () => {
   it("reports each subclass's own name and is a FoomtimeError", () => {
-    const err = new FoomtimeArgError("bad args");
+    const err = new FoomtimeRepairExhaustedError("gave up", "return");
     expect(err).toBeInstanceOf(FoomtimeError);
-    expect(err).toBeInstanceOf(FoomtimeValidationError);
-    expect(err.name).toBe("FoomtimeArgError");
+    expect(err.name).toBe("FoomtimeRepairExhaustedError");
   });
 
-  it("groups the three repairable failures under FoomtimeValidationError", () => {
-    for (const err of [new FoomtimeArgError("a"), new FoomtimeReturnError("r")]) {
-      expect(err).toBeInstanceOf(FoomtimeValidationError);
-    }
+  it("records on FoomtimeRepairExhaustedError which channel exhausted the loop", () => {
+    expect(new FoomtimeRepairExhaustedError("a", "args").channel).toBe("args");
+    expect(new FoomtimeRepairExhaustedError("d", "dispatch").channel).toBe("dispatch");
+    // An exposed-but-missing implementation is a separate fail-fast defect.
+    expect(new FoomtimeDispatchError("missing")).toBeInstanceOf(FoomtimeError);
+    expect(new FoomtimeDispatchError("missing")).not.toBeInstanceOf(FoomtimeRepairExhaustedError);
   });
 
   it("carries the caller-defined code only on FoomtimeThrowError", () => {
     const err = new FoomtimeThrowError("too low", "E_TOO_LOW");
     expect(err.code).toBe("E_TOO_LOW");
     expect(err).toBeInstanceOf(FoomtimeError);
-    expect(err).not.toBeInstanceOf(FoomtimeValidationError);
+    expect(err).not.toBeInstanceOf(FoomtimeRepairExhaustedError);
   });
 
   it("splits harness failures by retryability", () => {

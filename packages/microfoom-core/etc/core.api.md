@@ -17,7 +17,6 @@ export type AgentClassDecorator = <T extends abstract new (...args: never[]) => 
 
 // @public
 export interface AgentConfig {
-    allowedTools?: readonly string[];
     harness?: string;
     // (undocumented)
     maxBudgetUsd?: number;
@@ -29,14 +28,17 @@ export interface AgentConfig {
     maxTurnDuration?: Duration;
     // (undocumented)
     model?: string;
+    plugins?: readonly string[];
     // (undocumented)
     repairAttempts?: number;
     // (undocumented)
     retries?: number;
+    skills?: readonly string[];
     // (undocumented)
     systemPrompt?: SystemPrompt;
     // (undocumented)
     thinking?: ThinkingLevel;
+    tools?: readonly string[];
 }
 
 // @public
@@ -52,6 +54,9 @@ export interface AgentDecorators {
     // (undocumented)
     readonly expose: AgentExposeDecorator;
 }
+
+// @public
+export type AgentDoTemplate = (strings: TemplateStringsArray, ...values: unknown[]) => AgentResult<void>;
 
 // @public
 export type AgentExposeDecorator = AgentMethodDecorator & ((options?: AgentExposeOptions) => AgentMethodDecorator);
@@ -81,6 +86,9 @@ export interface AgentProgramContext<TProgram extends object> extends AgentRun {
 }
 
 // @public
+export type AgentProseTemplate = (strings: TemplateStringsArray, ...values: unknown[]) => AgentTextStream;
+
+// @public
 export interface AgentResult<T> extends PromiseLike<T> {
     // (undocumented)
     abort(reason?: unknown): void;
@@ -91,7 +99,9 @@ export interface AgentResult<T> extends PromiseLike<T> {
 // @public
 export interface AgentRun {
     // (undocumented)
-    readonly text: AgentTextTemplate;
+    readonly do: AgentDoTemplate;
+    // (undocumented)
+    readonly prose: AgentProseTemplate;
     // (undocumented)
     readonly value: AgentValueTemplate;
 }
@@ -115,9 +125,6 @@ export interface AgentSession extends AgentRun {
 // @public
 export interface AgentTextStream extends AgentResult<string>, AsyncIterable<string> {
 }
-
-// @public
-export type AgentTextTemplate = (strings: TemplateStringsArray, ...values: unknown[]) => AgentTextStream;
 
 // @public
 export interface AgentToolOptions {
@@ -204,10 +211,6 @@ export class FoomtimeAbortError extends FoomtimeError {
 }
 
 // @public
-export class FoomtimeArgError extends FoomtimeValidationError {
-}
-
-// @public
 export class FoomtimeBudgetExceededError extends FoomtimeError {
 }
 
@@ -228,7 +231,7 @@ export class FoomtimeConfigError extends FoomtimeError {
 }
 
 // @public
-export class FoomtimeDispatchError extends FoomtimeValidationError {
+export class FoomtimeDispatchError extends FoomtimeError {
 }
 
 // @public
@@ -283,10 +286,9 @@ export abstract class FoomtimeProgram<I = string[], R = unknown> {
 
 // @public
 export class FoomtimeRepairExhaustedError extends FoomtimeError {
-}
-
-// @public
-export class FoomtimeReturnError extends FoomtimeValidationError {
+    constructor(message: string, channel: RepairChannel, options?: FoomtimeErrorOptions);
+    // (undocumented)
+    readonly channel: RepairChannel;
 }
 
 // @public
@@ -305,10 +307,6 @@ export class FoomtimeTokenLimitExceededError extends FoomtimeError {
 }
 
 // @public
-export class FoomtimeValidationError extends FoomtimeError {
-}
-
-// @public
 export interface HarnessSession {
     fork?(): HarnessSession;
     // (undocumented)
@@ -320,6 +318,8 @@ export interface HarnessSession {
 export interface HarnessSessionOptions {
     // (undocumented)
     readonly model: string;
+    readonly plugins?: readonly string[];
+    readonly skills?: readonly string[];
 }
 
 // @public
@@ -365,6 +365,9 @@ export type OpenSession = (options: HarnessSessionOptions) => Promise<HarnessSes
 
 // @public
 export function Program<S extends StandardSchemaV1, R = unknown>(input: S): abstract new () => FoomtimeProgram<StandardSchemaV1.InferOutput<S>, R>;
+
+// @public
+export type RepairChannel = "args" | "return" | "dispatch";
 
 // @public
 export function runProgram<P extends FoomtimeProgram<never, unknown>>(ProgramClass: abstract new () => P, rawInput: unknown, options: RunProgramOptions): Promise<Awaited<ReturnType<P["main"]>>>;

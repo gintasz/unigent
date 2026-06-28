@@ -20,7 +20,6 @@ import {
   FoomtimeHarnessError,
   FoomtimeInputError,
   FoomtimeRepairExhaustedError,
-  FoomtimeReturnError,
   FoomtimeThrowError,
   FoomtimeTimeoutError,
   FoomtimeTokenLimitExceededError,
@@ -90,7 +89,6 @@ async function staysInContract(
 }
 
 const isThrow = (e: unknown): e is FoomtimeThrowError => e instanceof FoomtimeThrowError;
-const isReturn = (e: unknown): e is FoomtimeReturnError => e instanceof FoomtimeReturnError;
 const isRepairExhausted = (e: unknown): e is FoomtimeRepairExhaustedError =>
   e instanceof FoomtimeRepairExhaustedError;
 const isCallDepth = (e: unknown): e is FoomtimeCallDepthError =>
@@ -409,7 +407,7 @@ export const fixtures: readonly Fixture[] = [
     },
   },
   {
-    name: "a value turn with no foom_return raises FoomtimeReturnError",
+    name: "a value turn with no foom_return raises FoomtimeRepairExhaustedError",
     tiers: ["scripted"],
     script: [
       sayText("I will not use the tool."),
@@ -418,7 +416,12 @@ export const fixtures: readonly Fixture[] = [
       sayText("No."),
     ],
     async exec(ctx) {
-      await rejects(() => runProgram(ValueProgram, "x", base(ctx)), isReturn, "missing-return");
+      const error = await rejects(
+        () => runProgram(ValueProgram, "x", base(ctx)),
+        isRepairExhausted,
+        "missing-return",
+      );
+      assert(error.channel === "return", `expected channel "return", got ${error.channel}`);
     },
   },
   {
