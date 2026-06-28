@@ -103,15 +103,15 @@ export default class extends Program(Input) {
 
 ## Turn modes
 
-`this.agent` drives the model through three modes:
+Inside `main()`, `this.agent` is your handle to the runtime — how your program drives the engine that runs agents. Every call on it is one **turn**: you hand off an instruction and a new harness agent works on it — reasoning and calling tools as it goes — until it hands a result back to your code. Each turn resolves as a normal `await`, so a coordination script reads as ordinary TypeScript, not callbacks. You choose a *mode* by what you want back:
 
-- **`value(schema)`** — a structured turn. The agent must `foom_return` a value, validated against your Standard Schema; the awaited result is typed.
-- **`prose`** — a freeform natural-language turn. `await` for the full text, or `for await` to stream chunks.
-- **`do`** — an act turn: run instructions for their side effects and resolve to `void`. The cheapest mode — no schema, no final message.
+- **`value(schema)`** — a structured turn. The agent ends its work by calling the `foom_return` tool with a value, which is validated against the schema you passed; the awaited result is typed. If it doesn't, a repair prompt nudges it to make that call — or to use `foom_throw` as a last resort when the instructions can't be satisfied (impossible, self-contradictory, etc.).
+- **`prose`** — a freeform natural-language turn: the ordinary case of the agent answering your prompt. Its reply *is* the return value — `await` for the full text.
+- **`do`** — an act turn: run instructions for their side effects and resolve to `void`. The cheapest mode — no schema, no final message. The agent is told to finish with a no-argument `foom_return`, which cuts the unnecessary yapping you'd otherwise pay for (the "I've successfully completed your request… let me know if you need anything else!" tail).
 
 `.with({ ... })` layers per-call config; `.session()` opens a stateful conversation (shared transcript, `.fork()` to branch); `.scope("name")` (via `@microfoom/core/trace`) groups turns in the trace tree.
 
-## Control operations given to the agent
+## Control operations given to the agents
 
 An agent running inside a microfoom runtime interacts with it through 4 native tools — surfaced as structured function calls.
 
@@ -120,7 +120,7 @@ An agent running inside a microfoom runtime interacts with it through 4 native t
 - `foom_throw(message, code?)` — abort the turn with a deliberate, typed error.
 - `foom_inspect(method_name)` — look up an exposed method's parameter schema before calling it.
 
-Other than these 4 tools and a few lines added to its system prompt, an agent spawned by a coordination script is no different from one spawned by a CLI, because it uses the same default configuration.
+Other than these 4 tools and a few extra lines added to its system prompt, an agent spawned by a coordination script is no different from one spawned by a CLI, because it uses the same default configuration.
 
 ## Configuration
 
