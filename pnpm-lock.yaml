@@ -199,6 +199,9 @@ importers:
 
   packages/opencode-adapter:
     dependencies:
+      '@microfoom/adapter-base':
+        specifier: workspace:*
+        version: link:../adapter-base
       '@microfoom/core':
         specifier: workspace:*
         version: link:../microfoom-core

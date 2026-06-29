@@ -42,6 +42,7 @@
     "api:check": "api-extractor run --verbose"
   },
   "dependencies": {
+    "@microfoom/adapter-base": "workspace:*",
     "@microfoom/core": "workspace:*",
     "@opencode-ai/sdk": "1.17.9"
   }

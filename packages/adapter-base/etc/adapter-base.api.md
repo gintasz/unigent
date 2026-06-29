@@ -48,11 +48,17 @@ export const EMPTY_USAGE: UsageDelta;
 export type Json = Record<string, unknown>;
 
 // @public
+export function makeNaming(style: NamingStyle): ToolNaming;
+
+// @public
 export interface McpServerHandle {
     close: () => Promise<void>;
     terminated: () => boolean;
     readonly url: string;
 }
+
+// @public
+export type NamingStyle = "bracket" | "underscore";
 
 // @public
 export function resolveTurnResult(reader: TurnReaderState, proc: TurnProcess, label: string): SessionTurnResult;
@@ -75,6 +81,13 @@ export function startMcpServer(tools: readonly NeutralToolDef[], serverName: str
 
 // @public
 export function toolDescription(tool: NeutralToolDef): string;
+
+// @public
+export interface ToolNaming {
+    readonly applyRename: (text: string, toolNames: readonly string[], serverName: string) => string;
+    readonly prefixedToolName: (serverName: string, toolName: string) => string;
+    readonly stripPrefix: (serverName: string, name: string) => string;
+}
 
 // @public
 export interface TurnError {

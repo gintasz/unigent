@@ -16,6 +16,7 @@
 // the FOOM tools are served by an in-process MCP server (mcp.ts) so each tool's
 // `execute` is the real core closure over the live program.
 
+import { startMcpServer, toolDescription } from "@microfoom/adapter-base";
 import {
   FoomHarnessRejectedError,
   FoomHarnessUnavailableError,
@@ -35,7 +36,6 @@ import {
   splitModel,
 } from "./backend.js";
 import { buildSessionControls, type OpenCodeSessionControls } from "./controls.js";
-import { startMcpServer } from "./mcp.js";
 import { applyRename } from "./rename.js";
 import type { TurnOutcome } from "./result.js";
 
@@ -83,24 +83,31 @@ function composeSystemPrompt(programPrompt: string): string {
 
 /**
  * Reconcile core's bare FOOM tool names with the prefixed `<server>_<name>` the
- * model actually sees: rewrite every reference (tool descriptions, system prompt,
- * prompt) so the two agree. Each tool's `.name` stays canonical for MCP routing.
+ * model actually sees: rewrite every reference (system prompt + prompt) so the two
+ * agree. The tool DESCRIPTIONS are rewritten by the `describe` hook handed to
+ * adapter-base's MCP server (see {@link makeDescribe}); each tool's `.name` stays
+ * canonical for MCP routing.
  */
 function renameForModel(
   request: SessionTurnRequest,
   serverName: string,
-): { names: string[]; renamedTools: NeutralToolDef[]; systemPrompt: string; prompt: string } {
+): { names: string[]; systemPrompt: string; prompt: string } {
   const names = request.tools.map((tool) => tool.name);
-  const renamedTools: NeutralToolDef[] = request.tools.map((tool) => ({
-    ...tool,
-    description: applyRename(tool.description, names, serverName),
-  }));
   return {
     names,
-    renamedTools,
     systemPrompt: applyRename(composeSystemPrompt(request.systemPrompt), names, serverName),
     prompt: applyRename(request.prompt, names, serverName),
   };
+}
+
+/** A `describe` hook for adapter-base's MCP server: fold a tool's snippet/guidelines
+ *  into its description, then rewrite every tool-name reference to its prefixed form
+ *  so the listing the model reads matches the names it can call. */
+function makeDescribe(
+  names: readonly string[],
+  serverName: string,
+): (tool: NeutralToolDef) => string {
+  return (tool: NeutralToolDef): string => applyRename(toolDescription(tool), names, serverName);
 }
 
 /** Build the per-turn OpenCode built-in tool gate from core's `allowedTools`:
@@ -181,8 +188,12 @@ function createOpenCodeOpenSession(options: OpenCodeSessionOptions = {}): OpenSe
       let currentSessionId: string | undefined;
 
       const runTurn = async (request: SessionTurnRequest): Promise<SessionTurnResult> => {
-        const { renamedTools, systemPrompt, prompt } = renameForModel(request, serverName);
-        const mcp = await startMcpServer(renamedTools, serverName);
+        const { names, systemPrompt, prompt } = renameForModel(request, serverName);
+        const mcp = await startMcpServer(
+          request.tools,
+          serverName,
+          makeDescribe(names, serverName),
+        );
         const backend = await factory({ config: buildConfig(mcp.url, serverName, controls) });
         try {
           currentSessionId = await resolveSessionId(backend, currentSessionId, seedSessionId);

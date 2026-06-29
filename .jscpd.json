@@ -4,11 +4,5 @@
   "absolute": true,
   "gitignore": true,
   "pattern": "packages/*/src/**/*.ts",
-  "ignore": [
-    "**/dist/**",
-    "**/node_modules/**",
-    "**/*.test.ts",
-    "**/*-adapter/src/mcp.ts",
-    "**/*-adapter/src/rename.ts"
-  ]
+  "ignore": ["**/dist/**", "**/node_modules/**", "**/*.test.ts"]
 }

@@ -17,6 +17,7 @@ export {
   toolDescription,
 } from "./mcp.js";
 export { type CliProcess, type SpawnLineOptions, spawnLineProcess } from "./process.js";
+export { makeNaming, type NamingStyle, type ToolNaming } from "./rename.js";
 export {
   drainTurnStream,
   EMPTY_USAGE,

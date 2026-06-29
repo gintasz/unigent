@@ -6,6 +6,7 @@
 
 import { OpenSession } from '@microfoom/core';
 import { StreamEvent } from '@microfoom/core';
+import { TurnError } from '@microfoom/adapter-base';
 import type { UsageDelta } from '@microfoom/core';
 
 // @public

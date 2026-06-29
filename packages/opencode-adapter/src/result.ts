@@ -5,30 +5,17 @@
 // so this adapter never depends on the CLI's flaky `step_finish` stdout event.
 // A model-side failure (`info.error`) maps to a retryable turn error.
 
+import {
+  asArray,
+  asNumber,
+  asObject,
+  asString,
+  EMPTY_USAGE,
+  type Json,
+  type TurnError,
+} from "@microfoom/adapter-base";
 import type { StreamEvent, UsageDelta } from "@microfoom/core";
 import { stripPrefix } from "./rename.js";
-
-/** A raw decoded value from the SDK response. Shapes are validated structurally. */
-type Json = Record<string, unknown>;
-
-const asObject = (value: unknown): Json | undefined =>
-  typeof value === "object" && value !== null ? (value as Json) : undefined;
-
-const asArray = (value: unknown): readonly unknown[] => (Array.isArray(value) ? value : []);
-
-const asNumber = (value: unknown): number => (typeof value === "number" ? value : 0);
-
-const asString = (value: unknown): string | undefined =>
-  typeof value === "string" ? value : undefined;
-
-const EMPTY_USAGE: UsageDelta = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
-
-/** Why a turn ended badly (mapped to a FoomHarnessError by the caller). */
-interface TurnError {
-  readonly message: string;
-  /** Whether retrying could plausibly succeed (transient model/network/rate-limit). */
-  readonly retryable: boolean;
-}
 
 /** What the reader distils from one prompt's response. */
 interface TurnOutcome {
