@@ -11,8 +11,11 @@ pre-commit:
       run: pnpm run typecheck
     lint:types:
       run: pnpm run lint:types
+    # Whole-repo (like typecheck/lint:types above) and via the same `spell` script
+    # `check` runs — so the hook and `check` cover an identical file set and cannot
+    # drift. cspell over the repo is ~2s; staged-only is not worth a divergence risk.
     spell:
-      run: pnpm exec cspell --no-progress --no-must-find-files {staged_files}
+      run: pnpm run spell
 
 pre-push:
   parallel: false
