@@ -20,7 +20,9 @@ export interface ClaudeSpec {
   readonly serverName: string;
   /** Canonical FOOM tool names this turn exposes (always allowed). */
   readonly foomTools: readonly string[];
-  /** The harness's OWN (built-in) tools to allow: undefined = all, [] = none. */
+  /** The harness's OWN (built-in) tools to allow (vs the sibling `foomTools`):
+   *  undefined = all, [] = none. Mirrors core's `SessionTurnRequest.allowedTools`;
+   *  the `Harness` qualifier disambiguates it from `foomTools` here. */
   readonly allowedHarnessTools?: readonly string[] | undefined;
   /** Settings to inject via `--settings` for this session (e.g. `enabledPlugins`,
    *  `skillOverrides`). Composed on top of the hermetic `--setting-sources ""` base.

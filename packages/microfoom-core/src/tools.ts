@@ -9,15 +9,15 @@
 import type { StandardSchemaV1 } from "@standard-schema/spec";
 import type { RepairChannel } from "./errors.js";
 import {
-  FoomtimeBudgetExceededError,
-  FoomtimeCallDepthError,
-  FoomtimeConfigError,
-  FoomtimeError,
-  FoomtimeHarnessUnavailableError,
-  FoomtimeRepairExhaustedError,
-  FoomtimeThrowError,
-  FoomtimeTimeoutError,
-  FoomtimeTokenLimitExceededError,
+  FoomBudgetExceededError,
+  FoomCallDepthError,
+  FoomConfigError,
+  FoomError,
+  FoomHarnessUnavailableError,
+  FoomRepairExhaustedError,
+  FoomThrowError,
+  FoomTimeoutError,
+  FoomTokenLimitExceededError,
 } from "./errors.js";
 import type { AgentEvent } from "./events.js";
 import type { LLMToken } from "./options.js";
@@ -98,7 +98,7 @@ interface Capture {
   has: boolean;
   value?: unknown;
   thrown?: { message: string; code: string };
-  fatal?: FoomtimeError;
+  fatal?: FoomError;
 }
 
 const ok = (content: string): ToolExecResult => ({ content, isError: false });
@@ -251,7 +251,7 @@ function buildTurnTools(
     repair.count += 1;
     emitter.emit?.({ type: "repair", span: emitter.span, attempt: repair.count });
     if (repair.count > repairAttempts) {
-      capture.fatal = new FoomtimeRepairExhaustedError(
+      capture.fatal = new FoomRepairExhaustedError(
         "too many consecutive invalid attempts",
         channel,
       );
@@ -281,12 +281,12 @@ function buildTurnTools(
     try {
       return ok(await ctx.invoke(method, args));
     } catch (error) {
-      if (error instanceof FoomtimeThrowError) {
+      if (error instanceof FoomThrowError) {
         capture.thrown = { message: error.message, code: error.code };
         capture.has = true;
         return stop(TOOL_RESULTS.raised);
       }
-      if (error instanceof FoomtimeError) {
+      if (error instanceof FoomError) {
         capture.fatal = error;
         capture.has = true;
         return stop(TOOL_RESULTS.failed);
@@ -306,7 +306,7 @@ function buildTurnTools(
 // eslint-disable-next-line @typescript-eslint/promise-function-async -- builds timing plumbing via `new Promise`; `async` would wrap a promise in a promise for nothing.
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new FoomtimeTimeoutError(`turn exceeded ${ms}ms`)), ms);
+    const timer = setTimeout(() => reject(new FoomTimeoutError(`turn exceeded ${ms}ms`)), ms);
     promise.then(
       (value) => {
         clearTimeout(timer);
@@ -326,18 +326,16 @@ function enforceCaps(caps: ResolvedCaps, usage: UsageAccount): void {
       // The cap is unenforceable, not exceeded — a misconfiguration (no pricing for
       // this model), surfaced the moment usage is known rather than silently never
       // enforcing it (a cost/security footgun).
-      throw new FoomtimeConfigError(
+      throw new FoomConfigError(
         "maxBudgetUsd is set but the model cost is underivable (no pricing) — the cap cannot be enforced",
       );
     }
     if (usage.costUsd > caps.maxBudgetUsd) {
-      throw new FoomtimeBudgetExceededError(
-        `cost $${usage.costUsd} exceeds cap $${caps.maxBudgetUsd}`,
-      );
+      throw new FoomBudgetExceededError(`cost $${usage.costUsd} exceeds cap $${caps.maxBudgetUsd}`);
     }
   }
   if (caps.maxOutputTokens !== undefined && usage.outputTokens > caps.maxOutputTokens) {
-    throw new FoomtimeTokenLimitExceededError(
+    throw new FoomTokenLimitExceededError(
       `output tokens ${usage.outputTokens} exceeds cap ${caps.maxOutputTokens}`,
     );
   }
@@ -353,7 +351,7 @@ export interface RunTurnParams {
   readonly caps: ResolvedCaps;
   readonly fold: (delta: UsageAccount) => UsageAccount;
   readonly thinking?: string;
-  readonly allowedTools?: readonly string[];
+  readonly tools?: readonly string[];
   readonly omitBasePrompt?: boolean;
   /** Re-run a turn on a transient harness failure up to this many times (default 0). */
   readonly retries?: number;
@@ -379,7 +377,7 @@ function buildTurnRequest(
     tools,
   };
   if (params.thinking !== undefined) request.thinking = params.thinking;
-  if (params.allowedTools !== undefined) request.allowedTools = params.allowedTools;
+  if (params.tools !== undefined) request.allowedTools = params.tools;
   if (params.omitBasePrompt !== undefined) request.omitBasePrompt = params.omitBasePrompt;
   if (params.caps.maxOutputTokens !== undefined) {
     request.maxOutputTokens = params.caps.maxOutputTokens;
@@ -446,7 +444,7 @@ function settleOutcome(
 ): TurnOutcome | undefined {
   if (capture.fatal !== undefined) throw capture.fatal;
   if (capture.thrown !== undefined) {
-    throw new FoomtimeThrowError(capture.thrown.message, capture.thrown.code);
+    throw new FoomThrowError(capture.thrown.message, capture.thrown.code);
   }
   if (mode.kind === "text") return { kind: "text", text: assistantText };
   if (capture.has) {
@@ -457,7 +455,7 @@ function settleOutcome(
 
 /**
  * Run one harness turn, re-running it on a *transient* harness failure
- * ({@link FoomtimeHarnessUnavailableError}) up to `params.retries` times (default 0).
+ * ({@link FoomHarnessUnavailableError}) up to `params.retries` times (default 0).
  * The model's own in-turn tool repair is separate; this only covers the harness
  * itself failing (provider/network/no-result). A deliberate rejection or an aborted
  * signal is never retried. The per-turn timeout applies to each attempt.
@@ -477,7 +475,7 @@ async function runHarnessTurn(
       if (
         attempt < max &&
         params.signal?.aborted !== true &&
-        error instanceof FoomtimeHarnessUnavailableError
+        error instanceof FoomHarnessUnavailableError
       ) {
         continue;
       }
@@ -506,7 +504,7 @@ async function runTurnWithRepair(
     if (outcome !== undefined) return outcome;
 
     if (attempt >= params.caps.repairAttempts) {
-      throw new FoomtimeRepairExhaustedError(
+      throw new FoomRepairExhaustedError(
         params.mode.kind === "do"
           ? "the agent did not signal completion (no foom_return)"
           : "the agent produced no foom_return value",
@@ -526,7 +524,7 @@ async function runTurnWithRepair(
  */
 export async function runProgramTurn(params: RunTurnParams): Promise<TurnOutcome> {
   if (params.caps.maxCallDepth !== undefined && params.ctx.depth() > params.caps.maxCallDepth) {
-    throw new FoomtimeCallDepthError(
+    throw new FoomCallDepthError(
       `call depth ${params.ctx.depth()} exceeds maxCallDepth ${params.caps.maxCallDepth}`,
     );
   }

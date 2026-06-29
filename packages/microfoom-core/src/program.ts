@@ -9,13 +9,13 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import type { StandardSchemaV1 } from "@standard-schema/spec";
 import { type AgentConfig, durationToMs, mergeConfigChain } from "./config.js";
 import {
-  FoomtimeCancelledError,
-  FoomtimeConcurrencyError,
-  FoomtimeConfigError,
-  FoomtimeDispatchError,
-  FoomtimeError,
-  FoomtimeInputError,
-  FoomtimeTimeoutError,
+  FoomCancelledError,
+  FoomConcurrencyError,
+  FoomConfigError,
+  FoomDispatchError,
+  FoomError,
+  FoomInputError,
+  FoomTimeoutError,
 } from "./errors.js";
 import type { AgentEvent, AgentTraceExporter } from "./events.js";
 import type { AgentOptions } from "./options.js";
@@ -142,14 +142,14 @@ export function attachContext<P extends object>(program: P, context: AgentProgra
 }
 
 /** The program base class. Extend via Program(schema) for a typed input. */
-export abstract class FoomtimeProgram<I = string[], R = unknown> {
+export abstract class FoomProgram<I = string[], R = unknown> {
   public static input?: StandardSchemaV1;
   public static maxProgramDuration?: string;
 
   protected get agent(): AgentProgramContext<this> {
     const context = contexts.get(this);
     if (context === undefined) {
-      throw new FoomtimeError(
+      throw new FoomError(
         "this.agent is unavailable until main() runs — do not use it in the constructor or field initializers.",
       );
     }
@@ -181,8 +181,8 @@ export abstract class FoomtimeProgram<I = string[], R = unknown> {
  */
 export function Program<S extends StandardSchemaV1, R = unknown>(
   input: S,
-): abstract new () => FoomtimeProgram<StandardSchemaV1.InferOutput<S>, R> {
-  abstract class BoundProgram extends FoomtimeProgram<StandardSchemaV1.InferOutput<S>, R> {
+): abstract new () => FoomProgram<StandardSchemaV1.InferOutput<S>, R> {
+  abstract class BoundProgram extends FoomProgram<StandardSchemaV1.InferOutput<S>, R> {
     public static override input = input;
   }
   return BoundProgram;
@@ -259,7 +259,7 @@ function resolveCaps(config: AgentConfig): ResolvedCaps {
   if (config.maxTurnDuration !== undefined) {
     const ms = durationToMs(config.maxTurnDuration);
     if (ms === undefined)
-      throw new FoomtimeConfigError(`invalid maxTurnDuration: ${config.maxTurnDuration}`);
+      throw new FoomConfigError(`invalid maxTurnDuration: ${config.maxTurnDuration}`);
     caps.maxTurnDurationMs = ms;
   }
   return caps;
@@ -382,8 +382,7 @@ function buildContext(runtime: Runtime): ProgramTurnContext {
       const fn = (runtime.instance as Record<string, ((...a: unknown[]) => unknown) | undefined>)[
         method
       ];
-      if (typeof fn !== "function")
-        throw new FoomtimeDispatchError(`method "${method}" is missing`);
+      if (typeof fn !== "function") throw new FoomDispatchError(`method "${method}" is missing`);
       const previousDepth = runtime.depth;
       const previousMethodConfig = runtime.methodConfig;
       runtime.depth = previousDepth + 1;
@@ -407,7 +406,7 @@ interface Prepared {
   readonly systemPrompt: string;
   readonly caps: ResolvedCaps;
   readonly thinking?: string;
-  readonly allowedTools?: readonly string[];
+  readonly tools?: readonly string[];
   readonly omitBasePrompt?: boolean;
   readonly retries?: number;
 }
@@ -464,7 +463,7 @@ function prepare(runtime: Runtime, options: AgentOptions, frozen?: FrozenIdentit
   ].filter((c): c is AgentConfig => c !== undefined);
   const merged = mergeConfigChain(scopes);
   if (merged.model === undefined) {
-    throw new FoomtimeConfigError("no model configured (set it via run options or @foom.config)");
+    throw new FoomConfigError("no model configured (set it via run options or @foom.config)");
   }
   const systemPrompt =
     frozen !== undefined ? frozen.systemPrompt : composeProgramSystemPrompt(runtime, merged);
@@ -475,7 +474,7 @@ function prepare(runtime: Runtime, options: AgentOptions, frozen?: FrozenIdentit
     systemPrompt,
     caps: resolveCaps(merged),
     ...(merged.thinking !== undefined ? { thinking: merged.thinking } : {}),
-    ...(merged.tools !== undefined ? { allowedTools: merged.tools } : {}),
+    ...(merged.tools !== undefined ? { tools: merged.tools } : {}),
     ...(omitBasePrompt !== undefined ? { omitBasePrompt } : {}),
     ...(merged.retries !== undefined ? { retries: merged.retries } : {}),
   };
@@ -525,7 +524,7 @@ function assertNoLockedChange(extra: AgentOptions): void {
   const locked = SESSION_LOCKED_FIELDS.filter((field) => extra[field] !== undefined);
   if (locked.length === 0) return;
   const [subject, object] = locked.length === 1 ? ["it is", "it"] : ["they are", "them"];
-  throw new FoomtimeConfigError(
+  throw new FoomConfigError(
     `cannot change ${locked.join(", ")} mid-session — ${subject} fixed when session() opens. ` +
       `Open a new session(), or use a stateless this.agent turn, to vary ${object}.`,
   );
@@ -625,7 +624,7 @@ function buildRunTurnParams(args: {
     ...(traced ? { emit: (event: AgentEvent) => emitAll(runtime, event) } : {}),
     span,
     ...(prepared.thinking !== undefined ? { thinking: prepared.thinking } : {}),
-    ...(prepared.allowedTools !== undefined ? { allowedTools: prepared.allowedTools } : {}),
+    ...(prepared.tools !== undefined ? { tools: prepared.tools } : {}),
     ...(prepared.omitBasePrompt !== undefined ? { omitBasePrompt: prepared.omitBasePrompt } : {}),
     ...(prepared.retries !== undefined ? { retries: prepared.retries } : {}),
     ...(options.onToken !== undefined ? { onToken: options.onToken } : {}),
@@ -700,7 +699,7 @@ async function driveTurn(
       ),
     );
   } catch (error) {
-    if (signal.aborted) throw new FoomtimeCancelledError("the agent run was aborted");
+    if (signal.aborted) throw new FoomCancelledError("the agent run was aborted");
     throw error;
   } finally {
     if (traced) emitTurnEnd(runtime, span, startedAt, turnDelta);
@@ -720,8 +719,7 @@ function makeRun(
   // driveTurn clears the in-flight flag when it settles.
   const begin = (): void => {
     if (source.guard !== undefined) {
-      if (source.guard.inFlight)
-        throw new FoomtimeConcurrencyError("overlapping turns on one session");
+      if (source.guard.inFlight) throw new FoomConcurrencyError("overlapping turns on one session");
       source.guard.inFlight = true;
     }
   };
@@ -824,7 +822,7 @@ function sessionHandle(
     },
     // Branch the transcript into an independent session. Resolved on the fork's
     // first turn from the parent's transcript as it then stands; an unsupported
-    // harness surfaces FoomtimeConfigError. The branch inherits the parent's frozen
+    // harness surfaces FoomConfigError. The branch inherits the parent's frozen
     // identity (a fork continues the same persona; open a new session() for a new one).
     fork: () =>
       sessionHandle(
@@ -833,7 +831,7 @@ function sessionHandle(
         makeSource(async () => {
           const parent = await source.get();
           if (parent.fork === undefined) {
-            throw new FoomtimeConfigError("the active harness does not support session fork()");
+            throw new FoomConfigError("the active harness does not support session fork()");
           }
           return parent.fork();
         }),
@@ -863,7 +861,7 @@ function makeSession(runtime: Runtime, options: AgentOptions): AgentSession {
 
 function optionsModel(runtime: Runtime, options: AgentOptions): string {
   const merged = mergeConfigChain([runtime.defaults, runtime.classConfig, pickConfig(options)]);
-  if (merged.model === undefined) throw new FoomtimeConfigError("no model configured");
+  if (merged.model === undefined) throw new FoomConfigError("no model configured");
   return merged.model;
 }
 
@@ -891,7 +889,7 @@ function harnessPort(runtime: Runtime, name: string): OpenSession {
   const port = runtime.harnesses[name];
   if (port === undefined) {
     const known = Object.keys(runtime.harnesses);
-    throw new FoomtimeConfigError(
+    throw new FoomConfigError(
       `unknown harness "${name}"; registered: ${known.length > 0 ? known.join(", ") : "none"}`,
     );
   }
@@ -910,7 +908,7 @@ function optionsHarness(runtime: Runtime, options: AgentOptions): string {
     ),
   );
   if (merged.harness === undefined) {
-    throw new FoomtimeConfigError(
+    throw new FoomConfigError(
       "no harness selected (set defaultHarness in run options, or @foom.config({ harness }), or .with({ harness }))",
     );
   }
@@ -1000,16 +998,16 @@ function makeContext<P extends object>(
  * result type is inferred from the program's `main` return, so callers need not
  * (and the class need not) declare it.
  *
- * @param ProgramClass - A class extending `Program(schema)` (or `FoomtimeProgram`).
+ * @param ProgramClass - A class extending `Program(schema)` (or `FoomProgram`).
  * @param rawInput - Input for the program; validated against the class's input
  *   schema before `main` runs.
  * @param options - Harness registry, model, and source — see {@link RunProgramOptions}.
  * @returns The value `main` resolves to.
- * @throws {@link FoomtimeInputError} when `rawInput` fails the input schema.
- * @throws {@link FoomtimeConfigError} on bad config (e.g. no model, unknown harness).
- * @throws {@link FoomtimeRepairExhaustedError} when the agent's output can't be
- *   repaired, {@link FoomtimeThrowError} on a deliberate `foom_throw`, and other
- *   {@link FoomtimeError} subclasses on caps/aborts/harness failures (F7).
+ * @throws {@link FoomInputError} when `rawInput` fails the input schema.
+ * @throws {@link FoomConfigError} on bad config (e.g. no model, unknown harness).
+ * @throws {@link FoomRepairExhaustedError} when the agent's output can't be
+ *   repaired, {@link FoomThrowError} on a deliberate `foom_throw`, and other
+ *   {@link FoomError} subclasses on caps/aborts/harness failures (F7).
  * @example
  * ```ts
  * import { runProgram } from "@microfoom/core";
@@ -1026,14 +1024,14 @@ function makeContext<P extends object>(
  *  static `input` on the class), returning the parsed value (or the raw input when
  *  no schema is declared). */
 async function validateProgramInput(
-  ProgramClass: abstract new () => FoomtimeProgram<never, unknown>,
+  ProgramClass: abstract new () => FoomProgram<never, unknown>,
   rawInput: unknown,
 ): Promise<unknown> {
   const inputSchema = (ProgramClass as unknown as { input?: StandardSchemaV1 }).input;
   if (inputSchema === undefined) return rawInput;
   const validated = await Promise.resolve(inputSchema["~standard"].validate(rawInput));
   if (validated.issues !== undefined) {
-    throw new FoomtimeInputError("program input failed its schema", { data: validated.issues });
+    throw new FoomInputError("program input failed its schema", { data: validated.issues });
   }
   return validated.value;
 }
@@ -1044,11 +1042,11 @@ async function validateProgramInput(
 function resolveDefaultHarness(options: RunProgramOptions): string | undefined {
   const harnessNames = Object.keys(options.harnesses);
   if (harnessNames.length === 0) {
-    throw new FoomtimeConfigError("no harnesses registered (run options.harnesses is empty)");
+    throw new FoomConfigError("no harnesses registered (run options.harnesses is empty)");
   }
   const explicit = options.defaultHarness;
   if (explicit !== undefined && options.harnesses[explicit] === undefined) {
-    throw new FoomtimeConfigError(
+    throw new FoomConfigError(
       `defaultHarness "${explicit}" is not a registered harness (have: ${harnessNames.join(", ")})`,
     );
   }
@@ -1059,13 +1057,10 @@ function resolveDefaultHarness(options: RunProgramOptions): string | undefined {
 /** Race main() against the program's maxProgramDuration, always clearing the timer. */
 async function runWithProgramTimeout<T>(main: Promise<T>, maxDuration: string): Promise<T> {
   const ms = durationToMs(maxDuration as Parameters<typeof durationToMs>[0]);
-  if (ms === undefined) throw new FoomtimeConfigError(`invalid maxProgramDuration: ${maxDuration}`);
+  if (ms === undefined) throw new FoomConfigError(`invalid maxProgramDuration: ${maxDuration}`);
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<never>((_resolve, reject) => {
-    timer = setTimeout(
-      () => reject(new FoomtimeTimeoutError(`program exceeded ${maxDuration}`)),
-      ms,
-    );
+    timer = setTimeout(() => reject(new FoomTimeoutError(`program exceeded ${maxDuration}`)), ms);
   });
   try {
     return await Promise.race([main, timeout]);
@@ -1080,13 +1075,13 @@ async function runWithProgramTimeout<T>(main: Promise<T>, maxDuration: string): 
  * listener, and return `main()`'s result. The top-level entry point the CLI and
  * embedders call.
  */
-export async function runProgram<P extends FoomtimeProgram<never, unknown>>(
+export async function runProgram<P extends FoomProgram<never, unknown>>(
   ProgramClass: abstract new () => P,
   rawInput: unknown,
   options: RunProgramOptions,
 ): Promise<Awaited<ReturnType<P["main"]>>> {
   type Result = Awaited<ReturnType<P["main"]>>;
-  const Ctor = ProgramClass as unknown as new () => FoomtimeProgram<unknown, Result>;
+  const Ctor = ProgramClass as unknown as new () => FoomProgram<unknown, Result>;
   const instance = new Ctor();
 
   const input = await validateProgramInput(ProgramClass, rawInput);

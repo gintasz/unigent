@@ -17,7 +17,7 @@ Microfoom is a TypeScript framework for **coordination engineering** — composi
 
 ## Coordination engineering
 
-Two ideas lead here. **Loop engineering** — hand-rolling the run loop that drives an agent. And **dynamic workflows** — where a model writes a throwaway orchestration script for a single task and an engine executes it, so the loop and intermediate results live in code instead of in the agent's context.
+Two ideas lead here. **Loop engineering** — hand-rolling the run loop that drives an agent. And **dynamic workflows** — where a model writes a throwaway orchestration script for a single task and a runtime executes it, so the loop and intermediate results live in code instead of in the agent's context.
 
 Both put real control flow around the model instead of trusting one prompt. Coordination engineering goes further. A **coordination script** is durable, typed TypeScript — kept, versioned, reused — that composes multiple agents, parallel sessions, and even **different model harnesses** into one program: coordination a single-harness dynamic workflow can't reach.
 
@@ -103,7 +103,7 @@ export default class extends Program(Input) {
 
 ## Turn modes
 
-Inside `main()`, `this.agent` is your handle to the engine — how your program drives the engine that runs agents. Every call on it is one **turn**: you hand off an instruction and a new harness agent works on it — reasoning and calling tools as it goes — until it hands a result back to your code. Each turn resolves as a normal `await`, so a coordination script reads as ordinary TypeScript, not callbacks. You choose a *mode* by what you want back:
+Inside `main()`, `this.agent` is your handle to the runtime — how your program drives the runtime that runs agents. Every call on it is one **turn**: you hand off an instruction and a new harness agent works on it — reasoning and calling tools as it goes — until it hands a result back to your code. Each turn resolves as a normal `await`, so a coordination script reads as ordinary TypeScript, not callbacks. You choose a *mode* by what you want back:
 
 - **`value(schema)`** — a structured turn. The agent ends its work by calling the `foom_return` tool with a value, which is validated against the schema you passed; the awaited result is typed. If it doesn't, a repair prompt nudges it to make that call — or to use `foom_throw` as a last resort when the instructions can't be satisfied (impossible, self-contradictory, etc.).
 - **`prose`** — a freeform natural-language turn: the ordinary case of the agent answering your prompt. Its reply *is* the return value — `await` for the full text.
@@ -118,7 +118,7 @@ A **run** is one execution of your program — a single `runProgram(...)` (or `m
 import "@microfoom/core/trace";
 ```
 
-- **`this.agent.scope("name")`** — open a span of your own to group related turns (which otherwise sit flat under `main`). Scopes nest, so the tree mirrors the shape of the task.
+- **`this.agent.scope("name")`** — open a **scope**: a manual span that groups related turns (which otherwise sit flat under `main`). Scopes nest, so the tree mirrors the shape of the task.
 - **`scope.annotate({ … })`** — attach structured key/values to that span (a route, an id, a count), so you can see which inputs led to which work.
 - **`scope.log(message, level?)`** — attach a message to that span. It lives on the span and shows next to it in the inspector, not in the stdout.
 - **`this.agent.onEvent(handler)` / `.export(exporter)`** — read the event stream yourself, or pipe it out to a custom exporter.
@@ -128,7 +128,7 @@ The CLI's run panel and `--tui` inspector render exactly this tree.
 
 ## How the agent talks to your program
 
-An agent running inside a microfoom engine interacts with it through 4 native tools — surfaced as structured function calls.
+An agent running inside a microfoom runtime interacts with it through 4 native tools — surfaced as structured function calls.
 
 - `foom_return(value)` — hand back the turn's result, validated against your schema.
 - `foom_call(method_name, args)` — invoke one of your `@foom.expose`d methods.

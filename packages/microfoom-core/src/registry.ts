@@ -1,12 +1,12 @@
 // Decorator metadata store (internal). @foom.config / @foom.expose record
-// per-class and per-method metadata; the engine reads it back to build the config
+// per-class and per-method metadata; the runtime reads it back to build the config
 // cascade and the dispatch table.
 //
 // Keyed by the class constructor in a module WeakMap, populated through decorator
 // initializers (context.addInitializer) — deliberately NOT via Symbol.metadata,
 // whose runtime emission differs between tsc and the test transformer. Method
 // metadata is therefore complete once an instance has been constructed, which the
-// engine always does before reading.
+// runtime always does before reading.
 
 import type { AgentOptions, AgentToolOptions } from "./options.js";
 

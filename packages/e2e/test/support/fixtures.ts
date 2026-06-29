@@ -1,5 +1,5 @@
 // The behavior fixtures: one tiny program per runtime contract, each asserting an
-// observable OUTCOME (a validated value, the right Foomtime*Error subclass, a
+// observable OUTCOME (a validated value, the right Foom*Error subclass, a
 // foom_call side-effect, accumulated usage) — never an internal string or the
 // shape of the implementation. This is what keeps the suite honest: it encodes
 // what the runtime is meant to do, so it can catch the implementation getting it
@@ -13,16 +13,16 @@
 import { fileURLToPath } from "node:url";
 import {
   CONTROL_TOOLS,
-  FoomtimeBudgetExceededError,
-  FoomtimeCallDepthError,
-  FoomtimeConfigError,
-  FoomtimeError,
-  FoomtimeHarnessError,
-  FoomtimeInputError,
-  FoomtimeRepairExhaustedError,
-  FoomtimeThrowError,
-  FoomtimeTimeoutError,
-  FoomtimeTokenLimitExceededError,
+  FoomBudgetExceededError,
+  FoomCallDepthError,
+  FoomConfigError,
+  FoomError,
+  FoomHarnessError,
+  FoomInputError,
+  FoomRepairExhaustedError,
+  FoomThrowError,
+  FoomTimeoutError,
+  FoomTokenLimitExceededError,
   foom,
   makeStandardSchema,
   Program,
@@ -65,9 +65,9 @@ async function rejects<E extends Error>(
 
 /**
  * Assert an adversarial run terminates IN CONTRACT: it resolves to a value the
- * schema accepts, OR it rejects with a FoomtimeError (a deliberate foom_throw, a
+ * schema accepts, OR it rejects with a FoomError (a deliberate foom_throw, a
  * bad/missing return, repair exhaustion — the model's call, all legitimate). A
- * FoomtimeHarnessError is rethrown so the live wrapper can skip on a dead provider;
+ * FoomHarnessError is rethrown so the live wrapper can skip on a dead provider;
  * any OTHER thrown type is a leak (a foreign exception escaping the facade) and
  * fails. A hang is caught by the test timeout.
  */
@@ -80,27 +80,24 @@ async function staysInContract(
   try {
     value = await body();
   } catch (error) {
-    if (error instanceof FoomtimeHarnessError) throw error;
-    if (error instanceof FoomtimeError) return;
-    throw new Error(`${label}: leaked a non-Foomtime error: ${String(error)}`);
+    if (error instanceof FoomHarnessError) throw error;
+    if (error instanceof FoomError) return;
+    throw new Error(`${label}: leaked a non-Foom error: ${String(error)}`);
   }
   if (!isValid(value))
     throw new Error(`${label}: returned out-of-contract value: ${String(value)}`);
 }
 
-const isThrow = (e: unknown): e is FoomtimeThrowError => e instanceof FoomtimeThrowError;
-const isRepairExhausted = (e: unknown): e is FoomtimeRepairExhaustedError =>
-  e instanceof FoomtimeRepairExhaustedError;
-const isCallDepth = (e: unknown): e is FoomtimeCallDepthError =>
-  e instanceof FoomtimeCallDepthError;
-const isTimeout = (e: unknown): e is FoomtimeTimeoutError => e instanceof FoomtimeTimeoutError;
-const isTokenLimit = (e: unknown): e is FoomtimeTokenLimitExceededError =>
-  e instanceof FoomtimeTokenLimitExceededError;
-const isInput = (e: unknown): e is FoomtimeInputError => e instanceof FoomtimeInputError;
-const isBudgetOrUnenforceable = (
-  e: unknown,
-): e is FoomtimeBudgetExceededError | FoomtimeConfigError =>
-  e instanceof FoomtimeBudgetExceededError || e instanceof FoomtimeConfigError;
+const isThrow = (e: unknown): e is FoomThrowError => e instanceof FoomThrowError;
+const isRepairExhausted = (e: unknown): e is FoomRepairExhaustedError =>
+  e instanceof FoomRepairExhaustedError;
+const isCallDepth = (e: unknown): e is FoomCallDepthError => e instanceof FoomCallDepthError;
+const isTimeout = (e: unknown): e is FoomTimeoutError => e instanceof FoomTimeoutError;
+const isTokenLimit = (e: unknown): e is FoomTokenLimitExceededError =>
+  e instanceof FoomTokenLimitExceededError;
+const isInput = (e: unknown): e is FoomInputError => e instanceof FoomInputError;
+const isBudgetOrUnenforceable = (e: unknown): e is FoomBudgetExceededError | FoomConfigError =>
+  e instanceof FoomBudgetExceededError || e instanceof FoomConfigError;
 
 // ─── schemas + programs (the fixture subjects) ─────────────────────────────────
 
@@ -266,7 +263,7 @@ class NumberInputProgram extends Program<typeof numberSchema, number>(numberSche
 
 // Adversarial subjects (live robustness): genuinely impossible / self-contradicting
 // asks. A well-behaved runtime must terminate IN CONTRACT — a schema-valid value or
-// a FoomtimeError — never hang, never leak a foreign exception, never return garbage.
+// a FoomError — never hang, never leak a foreign exception, never return garbage.
 class ContradictoryProgram extends Program<typeof stringSchema, number>(stringSchema) {
   async main(): Promise<number> {
     return await this.agent.value(
@@ -316,7 +313,7 @@ export const fixtures: readonly Fixture[] = [
     },
   },
   {
-    name: "foom_throw surfaces as FoomtimeThrowError carrying the code",
+    name: "foom_throw surfaces as FoomThrowError carrying the code",
     tiers: ["scripted", "live"],
     script: [callTool(CONTROL_TOOLS.throw, { message: "cannot comply", code: "E_REFUSE" })],
     // The prompt names the exact code ("E_REFUSE"), so the live model must surface
@@ -412,7 +409,7 @@ export const fixtures: readonly Fixture[] = [
     },
   },
   {
-    name: "too many invalid returns raise FoomtimeRepairExhaustedError",
+    name: "too many invalid returns raise FoomRepairExhaustedError",
     tiers: ["scripted"],
     script: [
       callTool(CONTROL_TOOLS.return, { value: "nope" }),
@@ -463,7 +460,7 @@ export const fixtures: readonly Fixture[] = [
     },
   },
   {
-    name: "a value turn with no foom_return raises FoomtimeRepairExhaustedError",
+    name: "a value turn with no foom_return raises FoomRepairExhaustedError",
     tiers: ["scripted"],
     script: [
       sayText("I will not use the tool."),
@@ -536,8 +533,8 @@ export const fixtures: readonly Fixture[] = [
     script: [callTool(CONTROL_TOOLS.return, { value: 42 })],
     async exec(ctx) {
       // A live turn reports real cost; a near-zero cap is either exceeded
-      // (FoomtimeBudgetExceededError) or — if the model has no pricing — refused
-      // (FoomtimeConfigError). Both honour the contract; only silence would fail.
+      // (FoomBudgetExceededError) or — if the model has no pricing — refused
+      // (FoomConfigError). Both honour the contract; only silence would fail.
       await rejects(
         () =>
           runProgram(ValueProgram, "x", {

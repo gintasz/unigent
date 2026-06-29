@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { foom } from "../src/decorators.ts";
-import { FoomtimeConfigError } from "../src/index.ts";
+import { FoomConfigError } from "../src/index.ts";
 import { exposedMethods, readClassMeta } from "../src/registry.ts";
 
 @foom.config({ model: "m", thinking: "low", maxBudgetUsd: 5 })
@@ -52,6 +52,6 @@ describe("decorator registry (F3)", () => {
       metadata: {},
     };
     const decorate = foom.expose() as (value: unknown, context: unknown) => unknown;
-    expect(() => decorate(() => 1, privateContext)).toThrow(FoomtimeConfigError);
+    expect(() => decorate(() => 1, privateContext)).toThrow(FoomConfigError);
   });
 });

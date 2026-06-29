@@ -13,7 +13,7 @@ import { describe, expect, it } from "vitest";
 import {
   type AgentSession,
   CONTROL_TOOLS,
-  FoomtimeConfigError,
+  FoomConfigError,
   foom,
   type HarnessSession,
   type OpenSession,
@@ -154,7 +154,7 @@ describe("session.with() guard (locked identity fields)", () => {
   ];
 
   for (const [field, override] of lockedCases) {
-    it(`rejects .with({ ${field} }) on a session with FoomtimeConfigError`, async () => {
+    it(`rejects .with({ ${field} }) on a session with FoomConfigError`, async () => {
       class P extends Program<typeof stringInput, string>(stringInput) {
         async main(): Promise<string> {
           // The .with() itself throws synchronously when building the handle.
@@ -165,7 +165,7 @@ describe("session.with() guard (locked identity fields)", () => {
         harnesses: { rec: recordingOpenSession([], [{ text: "ok" }]) },
         model: "fake",
       });
-      await expect(run).rejects.toBeInstanceOf(FoomtimeConfigError);
+      await expect(run).rejects.toBeInstanceOf(FoomConfigError);
       await expect(run).rejects.toThrow(field); // the message names the offending field
     });
   }

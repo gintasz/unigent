@@ -4,7 +4,7 @@
 // method is additionally advertised as its own native tool with its derived
 // parameter schema (ADR-0003).
 
-/** Reserved native tool names for the control operations. */
+/** Reserved native tool names for the control tools. */
 export const CONTROL_TOOLS = {
   call: "foom_call",
   return: "foom_return",
@@ -12,11 +12,13 @@ export const CONTROL_TOOLS = {
   inspect: "foom_inspect",
 } as const;
 
+/** One of the four reserved control-tool names (`foom_call` / `foom_return` /
+ *  `foom_throw` / `foom_inspect`). */
 export type ControlToolName = (typeof CONTROL_TOOLS)[keyof typeof CONTROL_TOOLS];
 
 const CONTROL_TOOL_NAMES: ReadonlySet<string> = new Set(Object.values(CONTROL_TOOLS));
 
-/** True when a tool name is one of the reserved control operations. */
+/** True when a tool name is one of the reserved control tools. */
 export function isControlTool(name: string): name is ControlToolName {
   return CONTROL_TOOL_NAMES.has(name);
 }
@@ -32,7 +34,7 @@ export const DEFAULT_THROW_CODE = "error_unspecified";
  */
 export const CONTROL_TOOL_DESCRIPTIONS: Record<ControlToolName, string> = {
   [CONTROL_TOOLS.call]:
-    "Invoke an exposed microfoom method by name. `arguments` is an object of its parameters (learn it with foom_inspect).",
+    "Call an exposed microfoom method by name. `arguments` is an object of its parameters (learn it with foom_inspect).",
   [CONTROL_TOOLS.inspect]:
     "Return the parameter schema of an exposed microfoom method so you can build a valid foom_call.",
   [CONTROL_TOOLS.throw]: `Abort the execution with a deliberate error. \`code\` is optional — omit it (it defaults to \`${DEFAULT_THROW_CODE}\`) unless your instructions specify one.`,

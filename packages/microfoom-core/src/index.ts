@@ -9,7 +9,7 @@
  * Write a program by extending {@link Program} and driving `this.agent`
  * ({@link AgentRun}: `do` / `prose` / `value`); expose methods to the agent with
  * {@link foom}; run it with {@link runProgram}. Failures surface as the
- * {@link FoomtimeError} taxonomy.
+ * {@link FoomError} taxonomy.
  *
  * @packageDocumentation
  */
@@ -31,30 +31,32 @@ export type {
 } from "./decorators.js";
 export { foom } from "./decorators.js";
 // Error taxonomy (F7)
-export type { FoomtimeErrorOptions, RepairChannel } from "./errors.js";
+export type { FoomErrorOptions, RepairChannel } from "./errors.js";
 export {
-  FoomtimeAbortError,
-  FoomtimeBudgetExceededError,
-  FoomtimeCallDepthError,
-  FoomtimeCancelledError,
-  FoomtimeConcurrencyError,
-  FoomtimeConfigError,
-  FoomtimeDispatchError,
-  FoomtimeError,
-  FoomtimeHarnessError,
-  FoomtimeHarnessRejectedError,
-  FoomtimeHarnessUnavailableError,
-  FoomtimeInputError,
-  FoomtimeRepairExhaustedError,
-  FoomtimeThrowError,
-  FoomtimeTimeoutError,
-  FoomtimeTokenLimitExceededError,
+  FoomAbortError,
+  FoomBudgetExceededError,
+  FoomCallDepthError,
+  FoomCancelledError,
+  FoomConcurrencyError,
+  FoomConfigError,
+  FoomDispatchError,
+  FoomError,
+  FoomHarnessError,
+  FoomHarnessRejectedError,
+  FoomHarnessUnavailableError,
+  FoomInputError,
+  FoomRepairExhaustedError,
+  FoomThrowError,
+  FoomTimeoutError,
+  FoomTokenLimitExceededError,
 } from "./errors.js";
+// Run events (the AgentEvent payload of RunProgramOptions.onEvent)
+export type { AgentEvent } from "./events.js";
 export type {
   AgentCancellation,
   AgentExposeOptions,
   AgentOptions,
-  AgentRuntimeHooks,
+  AgentRunHooks,
   AgentToolOptions,
   AgentTurnMeta,
   LLMToken,
@@ -69,7 +71,7 @@ export type {
   AgentValueTemplate,
   RunProgramOptions,
 } from "./program.js";
-export { attachContext, FoomtimeProgram, Program, runProgram } from "./program.js";
+export { attachContext, FoomProgram, Program, runProgram } from "./program.js";
 // Protocol (control-tool names, for harness/tooling authors)
 export type { ControlToolName } from "./protocol.js";
 export { CONTROL_TOOLS, isControlTool } from "./protocol.js";

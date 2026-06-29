@@ -117,7 +117,7 @@ describe("harness selection (cascade + registry resolution)", () => {
     await expect(
       runProgram(P, "x", { harnesses: { a: fakeOpenSession([{ text: "x" }]) }, model: "fake" }),
     ).rejects.toMatchObject({
-      name: "FoomtimeConfigError",
+      name: "FoomConfigError",
       message: expect.stringContaining('unknown harness "nope"'),
     });
   });
@@ -131,7 +131,7 @@ describe("harness selection (cascade + registry resolution)", () => {
     await expect(
       runProgram(P, "x", { harnesses: labelled(), model: "fake" }),
     ).rejects.toMatchObject({
-      name: "FoomtimeConfigError",
+      name: "FoomConfigError",
       message: expect.stringContaining("no harness selected"),
     });
   });
@@ -143,7 +143,7 @@ describe("harness selection (cascade + registry resolution)", () => {
       }
     }
     await expect(runProgram(P, "x", { harnesses: {}, model: "fake" })).rejects.toMatchObject({
-      name: "FoomtimeConfigError",
+      name: "FoomConfigError",
       message: expect.stringContaining("no harnesses registered"),
     });
   });
@@ -161,7 +161,7 @@ describe("harness selection (cascade + registry resolution)", () => {
         model: "fake",
       }),
     ).rejects.toMatchObject({
-      name: "FoomtimeConfigError",
+      name: "FoomConfigError",
       message: expect.stringContaining("not a registered harness"),
     });
   });

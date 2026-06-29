@@ -7,6 +7,9 @@ import { type AgentEvent, buildRunTree } from "@microfoom/core/trace";
 import { createLogUpdate } from "log-update";
 import { renderRunTree } from "./render.js";
 
+/** A live render target for a run's event stream: feed it each `AgentEvent`
+ *  via `onEvent`, then call `done()` to freeze the final frame. */
+
 export interface Panel {
   readonly onEvent: (event: AgentEvent) => void;
   /** Freeze the final frame (call once the run settles). */

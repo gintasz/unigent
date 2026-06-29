@@ -2,13 +2,13 @@
 // also exposes abort() and a live usage snapshot; an AgentTextStream additionally
 // yields chunks. Consumers await Promises and catch the thrown taxonomy (F7).
 // Cancellation is an AbortController; abort() rejects the awaiter with
-// FoomtimeCancelledError.
+// FoomCancelledError.
 
 import type { AgentUsage } from "./usage.js";
 
 /**
  * The awaitable result of an agent turn. Awaiting yields the value; abort()
- * cancels an in-flight run (the awaiter then rejects with FoomtimeCancelledError).
+ * cancels an in-flight run (the awaiter then rejects with FoomCancelledError).
  * An un-awaited result self-handles its own cancellation rejection, so abort()
  * never surfaces an unhandledRejection.
  */

@@ -5,7 +5,7 @@
 
 import {
   CONTROL_TOOLS,
-  FoomtimeRepairExhaustedError,
+  FoomRepairExhaustedError,
   makeStandardSchema,
   Program,
   runProgram,
@@ -79,7 +79,7 @@ describe("claudecli adapter via fake claude (offline)", () => {
     expect(out).toBe(5);
   });
 
-  it("a value turn with no foom_return raises FoomtimeRepairExhaustedError", async () => {
+  it("a value turn with no foom_return raises FoomRepairExhaustedError", async () => {
     const { openSession, model } = harnessFor([
       { kind: "text", text: "I refuse the tool." },
       { kind: "text", text: "Still refusing." },
@@ -97,7 +97,7 @@ describe("claudecli adapter via fake claude (offline)", () => {
         model,
         defaults: { tools: [] },
       }),
-    ).rejects.toBeInstanceOf(FoomtimeRepairExhaustedError);
+    ).rejects.toBeInstanceOf(FoomRepairExhaustedError);
   });
 
   it("fork() branches a session into an independent one", async () => {

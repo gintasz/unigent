@@ -82,6 +82,8 @@ function rowsOf(root: RunNode): TraceRow[] {
 
 // --- painting: rows → a colored, width-aligned panel string ----------------
 
+/** Options controlling how a run summary is rendered to text. */
+
 export interface RenderOptions {
   /** Terminal width to right-align metrics to. Default 80. */
   readonly width?: number;

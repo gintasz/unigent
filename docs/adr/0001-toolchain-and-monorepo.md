@@ -46,11 +46,13 @@ not an edit to the governing principles.
 - **No Effect.** Domain logic is plain TypeScript; the usage monoid (OB3) is a
   small hand-written `combineUsage`/`emptyUsage` (its laws pinned by property
   tests). Effect-internal was dropped with ADR-0002; with `effect` gone, the
-  `@effect/eslint-plugin` rule (which only guarded the `effect` barrel) and eslint
-  itself were removed — biome is the sole linter.
-- **Format/lint/arch:** biome (format + lint), dependency-cruiser (layer/import
-  rules), ast-grep / `@ast-grep/cli` (in-file bans biome can't express),
-  api-extractor (`.api.md` surface report).
+  `@effect/eslint-plugin` rule was removed. biome is the primary linter/formatter,
+  with a thin type-aware ESLint layer (typescript-eslint, `eslint.config.js`) for
+  the `no-unsafe-*` family and other rules biome's shallow inference can't express.
+- **Format/lint/arch:** biome (format + lint), typescript-eslint (type-aware lint
+  for the `no-unsafe-*` family), dependency-cruiser (layer/import rules), ast-grep /
+  `@ast-grep/cli` (in-file bans biome can't express), api-extractor (`.api.md`
+  surface report).
 - **Test:** vitest + fast-check (property-based), transformed by **SWC**
   (`unplugin-swc`) because the default Vite transform (oxc) does not lower the
   TC39 decorators that `@foom.config`/`@foom.expose` use.
@@ -64,6 +66,7 @@ not an edit to the governing principles.
 | Constitution class | Instance | Rules |
 | --- | --- | --- |
 | formatter / linter | biome | B2, B7, L3, N1, N2 |
+| type-aware linter | typescript-eslint (`eslint.config.js`) | L3 (no-any-leak via `no-unsafe-*`), T1 |
 | custom code-pattern checker | ast-grep (`@ast-grep/cli`) | L3, F3 |
 | import-graph / arch checker | dependency-cruiser | A2, A3, A4, F6, F8, Q4, DEP2 |
 | public-surface reporter | `@microsoft/api-extractor` (`.api.md`) | A2, F6 |
@@ -86,6 +89,7 @@ Every gate runs locally (lefthook) and in CI before merge. Changing any toolchai
 member is a P6 amendment recorded as a new ADR. Deliberate choice: SWC over the
 default Vite/oxc test transform (decorator lowering). The Effect ecosystem was
 removed entirely once the harness took the loop (ADR-0002) — domain logic is plain
-TypeScript, biome is the only linter, and the usage monoid is hand-written. OB1's
+TypeScript, biome is the primary linter (with a thin type-aware typescript-eslint
+layer for the `no-unsafe-*` family), and the usage monoid is hand-written. OB1's
 renderer is the core's own `formatEvent` over the trace event stream; ANSI styling
 (`@effect/printer-ansi`) is deferred until structured logging is built out.

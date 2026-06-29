@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Agentic coordination engineering in TypeScript: compose many agents, sessions, and model harnesses into one typed program.",
+  "description": "A TypeScript framework for agentic coordination: compose many agents, sessions, and model harnesses into one typed program.",
   "keywords": [
     "agents",
     "llm",

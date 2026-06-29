@@ -5,10 +5,12 @@
 // program→agent binding). Same approach as the pi extension.
 
 import { pathToFileURL } from "node:url";
-import type { FoomtimeProgram } from "@microfoom/core";
+import type { FoomProgram } from "@microfoom/core";
 import { register } from "tsx/esm/api";
 
-export type ProgramClass = abstract new () => FoomtimeProgram<never, unknown>;
+/** The constructor of a loadable program — a class extending `FoomProgram`.
+ *  The CLI loader resolves a module's program export to this. */
+export type ProgramClass = abstract new () => FoomProgram<never, unknown>;
 
 let registered = false;
 

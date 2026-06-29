@@ -5,7 +5,7 @@
 //   - systemPrompt COMPOSES: `append` accumulates, `replace` resets the base.
 //   - everything else OVERRIDES: nearest scope wins.
 // The merge here is pure and total; an unenforceable cap (F5) is rejected later,
-// at engine setup, through the typed error channel — not in this module.
+// at runtime setup, through the typed error channel — not in this module.
 
 /** A wall-clock duration literal: seconds, minutes, or hours. */
 export type Duration = `${number}s` | `${number}m` | `${number}h`;
@@ -27,7 +27,7 @@ export interface AgentConfig {
    * Model id the agent runs on, as `"provider/id"` (e.g.
    * `"openrouter/deepseek/deepseek-v4-flash"`). Opaque to the core — the harness
    * resolves it. No built-in default: a turn with no model in any scope is a
-   * {@link FoomtimeConfigError}.
+   * {@link FoomConfigError}.
    */
   model?: string;
   /** Which registered harness runs this scope's agent turns. An opaque key into
@@ -60,14 +60,14 @@ export interface AgentConfig {
    *  at the widest scope, whatever the harness/model defaults to). */
   thinking?: ThinkingLevel;
   /** How many times to re-run a turn that fails with a *transient* harness error
-   *  ({@link FoomtimeHarnessUnavailableError} — provider/network failure, model
+   *  ({@link FoomHarnessUnavailableError} — provider/network failure, model
    *  overloaded, no result produced). The model's own in-turn tool repair and a
-   *  deliberate {@link FoomtimeHarnessRejectedError} or `foom_throw` are NOT retried;
+   *  deliberate {@link FoomHarnessRejectedError} or `foom_throw` are NOT retried;
    *  schema-validation failures use {@link AgentConfig.repairAttempts} instead.
    *  @defaultValue `0` (no retry) */
   retries?: number;
   /** Consecutive validation failures tolerated before the turn gives up with
-   *  {@link FoomtimeRepairExhaustedError}. Each bad `foom_call`/`foom_return` is fed
+   *  {@link FoomRepairExhaustedError}. Each bad `foom_call`/`foom_return` is fed
    *  back to the model as a repair hint and counts toward this budget.
    *  @defaultValue `3` */
   repairAttempts?: number;
@@ -76,22 +76,22 @@ export interface AgentConfig {
    *  `{ append }` (accumulates onto wider scopes) or `{ replace }` (discards them
    *  and becomes the new base). Session-scoped: the composed result is frozen when a
    *  stateful session opens and re-applied to every turn — a per-turn `.with()` that
-   *  sets it on a session handle is a {@link FoomtimeConfigError}; vary it by opening a
+   *  sets it on a session handle is a {@link FoomConfigError}; vary it by opening a
    *  new session() or via a stateless turn (which opens a fresh session each). */
   systemPrompt?: SystemPrompt;
   // --- cap: tightens only, never loosens ---
   /** Hard ceiling on run cost in USD; exceeding it aborts with
-   *  {@link FoomtimeBudgetExceededError}. Tighten-only across the cascade — a
+   *  {@link FoomBudgetExceededError}. Tighten-only across the cascade — a
    *  narrower scope can lower it, never raise it. Absent = uncapped. */
   maxBudgetUsd?: number;
   /** Hard ceiling on output tokens; exceeding it aborts with
-   *  {@link FoomtimeTokenLimitExceededError}. Tighten-only. Absent = uncapped. */
+   *  {@link FoomTokenLimitExceededError}. Tighten-only. Absent = uncapped. */
   maxOutputTokens?: number;
   /** Maximum nesting depth of `foom_call` re-entry; exceeding it aborts with
-   *  {@link FoomtimeCallDepthError}. Tighten-only. Absent = uncapped. */
+   *  {@link FoomCallDepthError}. Tighten-only. Absent = uncapped. */
   maxCallDepth?: number;
   /** Wall-clock ceiling on a single turn (a {@link Duration} like `"30s"`);
-   *  exceeding it aborts with {@link FoomtimeTimeoutError}. Tighten-only.
+   *  exceeding it aborts with {@link FoomTimeoutError}. Tighten-only.
    *  Absent = uncapped. */
   maxTurnDuration?: Duration;
 }

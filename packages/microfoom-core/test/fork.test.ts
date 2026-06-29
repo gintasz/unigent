@@ -1,7 +1,7 @@
 // AgentSession.fork() branches the transcript (sketch "Advanced: fork a session").
 // fork() returns a new session seeded with a COPY of the parent's transcript so far,
 // diverging independently. A harness whose session can't clone its state omits the
-// port's fork() and core surfaces FoomtimeConfigError. `.with()` is also covered:
+// port's fork() and core surfaces FoomConfigError. `.with()` is also covered:
 // it layers options onto the SAME transcript (shared session), not a fresh one.
 
 import type { StandardSchemaV1 } from "@standard-schema/spec";
@@ -85,7 +85,7 @@ describe("AgentSession.fork (transcript branching)", () => {
     expect(out).toBe(2);
   });
 
-  it("throws FoomtimeConfigError when the harness session can't fork", async () => {
+  it("throws FoomConfigError when the harness session can't fork", async () => {
     class Q extends Program<typeof stringInput, string>(stringInput) {
       async main(): Promise<string> {
         return await this.agent.session().fork().prose`x`;
@@ -95,7 +95,7 @@ describe("AgentSession.fork (transcript branching)", () => {
     await expect(
       runProgram(Q, "x", { harnesses: fakeHarness([]), model: "fake" }),
     ).rejects.toMatchObject({
-      name: "FoomtimeConfigError",
+      name: "FoomConfigError",
       message: expect.stringContaining("does not support session fork"),
     });
   });

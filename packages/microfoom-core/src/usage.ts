@@ -99,7 +99,7 @@ export function accountFromDelta(
   };
 }
 
-/** Optional timestamps/duration the engine stamps onto the projected usage. */
+/** Optional timestamps/duration the runtime stamps onto the projected usage. */
 export interface UsageTimes {
   startedAt?: Date;
   updatedAt?: Date;

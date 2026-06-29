@@ -1,10 +1,10 @@
 // `retries` re-runs a turn on a transient harness failure
-// (FoomtimeHarnessUnavailableError) up to the configured count, then gives up.
+// (FoomHarnessUnavailableError) up to the configured count, then gives up.
 // Driven by a flaky in-process session that throws N times before succeeding.
 
 import { describe, expect, it } from "vitest";
 import {
-  FoomtimeHarnessUnavailableError,
+  FoomHarnessUnavailableError,
   type HarnessSession,
   makeStandardSchema,
   Program,
@@ -28,7 +28,7 @@ function flaky(failsBefore: number): {
   const session: HarnessSession = {
     async runTurn(_request: SessionTurnRequest): Promise<SessionTurnResult> {
       attempts += 1;
-      if (attempts <= failsBefore) throw new FoomtimeHarnessUnavailableError("transient");
+      if (attempts <= failsBefore) throw new FoomHarnessUnavailableError("transient");
       return { assistantText: "ok", usage: USAGE };
     },
   };
@@ -57,7 +57,7 @@ describe("retries (transient harness failures)", () => {
     const { harnesses, attempts } = flaky(5);
     await expect(
       runProgram(Echo, "x", { harnesses, model: "m", defaults: { tools: [], retries: 1 } }),
-    ).rejects.toBeInstanceOf(FoomtimeHarnessUnavailableError);
+    ).rejects.toBeInstanceOf(FoomHarnessUnavailableError);
     expect(attempts()).toBe(2); // 1 initial + 1 retry
   });
 
@@ -65,7 +65,7 @@ describe("retries (transient harness failures)", () => {
     const { harnesses, attempts } = flaky(1);
     await expect(
       runProgram(Echo, "x", { harnesses, model: "m", defaults: { tools: [] } }),
-    ).rejects.toBeInstanceOf(FoomtimeHarnessUnavailableError);
+    ).rejects.toBeInstanceOf(FoomHarnessUnavailableError);
     expect(attempts()).toBe(1);
   });
 });

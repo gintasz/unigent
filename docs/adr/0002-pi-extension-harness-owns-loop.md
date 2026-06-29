@@ -1,4 +1,4 @@
-# ADR-0002: pi-extension deployment; the harness owns the turn loop
+# ADR-0002: The harness/adapter owns the turn loop
 
 - **Status:** accepted (revises the initial "core owns the loop" decision). NOTE
   2026-06-27: the pi-*extension* deployment described below was prototyped then
@@ -31,12 +31,12 @@ in the real deployment **pi owns the model loop and executes the tools**.
   `~/.pi` (coding-agent `ModelRegistry`/`AuthStorage`) and `pi-ai` providers. The
   CLI (`microfoom run`) loads a program and runs it against a programmatic pi
   sub-session per run.
-- **Effect-internal (X2/L2) is superseded.** With the loop owned by pi, core is no
-  longer an Effect program: domain logic is pure values, usage accounting stays a
-  `@effect/typeclass` Monoid (OB3), and the harness seam is plain Promise with the
-  thrown public taxonomy (F7). The `effect` runtime dependency is dropped from the
-  core. F6 (Effect-free public surface) is trivially upheld; the no-raw-try ast-grep
-  rule (which enforced X2) is removed.
+- **Effect-internal (X2/L2) is superseded.** With the loop owned by the harness, core
+  is no longer an Effect program: domain logic is pure values, usage accounting is a
+  plain hand-written monoid — `combineUsage`/`emptyUsage` (OB3), laws pinned by
+  property tests — and the harness seam is plain Promise with the thrown public
+  taxonomy (F7). The `effect` dependency is dropped from the core; the no-raw-try
+  ast-grep rule (which enforced X2) is removed.
 
 ## Consequences
 

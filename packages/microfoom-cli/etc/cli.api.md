@@ -6,14 +6,17 @@
 
 import { AgentEvent } from '@microfoom/core/trace';
 import type { AgentUsage } from '@microfoom/core/trace';
-import type { FoomtimeProgram } from '@microfoom/core';
+import type { FoomProgram } from '@microfoom/core';
 import { OpenSession } from '@microfoom/core';
 import type { RunNode } from '@microfoom/core/trace';
 
 // @public
 export function attachPanel(stream: NodeJS.WriteStream): Panel;
 
-// @public (undocumented)
+// @public
+export const CLI_VERSION = "0.1.0";
+
+// @public
 export function fakeOpenSession(): OpenSession;
 
 // @public
@@ -31,17 +34,17 @@ export function fmtTokens(total: number): string;
 // @public
 export function loadProgram(sourceFile: string): Promise<ProgramClass>;
 
-// @public (undocumented)
+// @public
 export interface Panel {
     readonly done: () => void;
     // (undocumented)
     readonly onEvent: (event: AgentEvent) => void;
 }
 
-// @public (undocumented)
-export type ProgramClass = abstract new () => FoomtimeProgram<never, unknown>;
+// @public
+export type ProgramClass = abstract new () => FoomProgram<never, unknown>;
 
-// @public (undocumented)
+// @public
 export interface RenderOptions {
     readonly color?: boolean;
     readonly width?: number;
@@ -49,7 +52,5 @@ export interface RenderOptions {
 
 // @public
 export function renderRunTree(root: RunNode, options?: RenderOptions): string;
-
-// (No @packageDocumentation comment for this package)
 
 ```

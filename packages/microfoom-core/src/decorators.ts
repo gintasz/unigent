@@ -4,7 +4,7 @@
 // makes one agent-callable (F3), and a language-private (#) member can never be
 // exposed.
 
-import { FoomtimeConfigError } from "./errors.js";
+import { FoomConfigError } from "./errors.js";
 import type { AgentExposeOptions, AgentOptions, AgentToolOptions } from "./options.js";
 import { classMetaForCtor, type ExposeMeta, type ExposureTier, methodMetaFor } from "./registry.js";
 
@@ -87,7 +87,7 @@ function makeConfig(options: AgentOptions): AgentDecorator {
       });
       return;
     }
-    throw new FoomtimeConfigError("@foom.config applies to a class or method only.");
+    throw new FoomConfigError("@foom.config applies to a class or method only.");
   };
   // The runtime handles both class and method contexts; the public type is the
   // intersection, which no single concrete function signature can express.
@@ -115,10 +115,10 @@ function buildExposeMeta(
 
 function applyExpose(options: AgentExposeOptions | undefined, context: AnyDecoratorContext): void {
   if (context.kind !== "method") {
-    throw new FoomtimeConfigError("@foom.expose applies to methods only.");
+    throw new FoomConfigError("@foom.expose applies to methods only.");
   }
   if (context.private) {
-    throw new FoomtimeConfigError("Private (#) members can never be exposed to the agent (F3).");
+    throw new FoomConfigError("Private (#) members can never be exposed to the agent (F3).");
   }
   const tier: ExposureTier =
     options?.tool !== undefined

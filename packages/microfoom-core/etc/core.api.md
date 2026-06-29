@@ -51,6 +51,75 @@ export interface AgentDecorators {
 export type AgentDoTemplate = (strings: TemplateStringsArray, ...values: unknown[]) => AgentResult<void>;
 
 // @public
+export type AgentEvent = {
+    readonly type: "span_start";
+    readonly span: string;
+    readonly parent?: string;
+    readonly name: string;
+    readonly kind?: "program" | "method" | "turn" | "scope";
+} | {
+    readonly type: "span_end";
+    readonly span: string;
+    readonly durationMs: number;
+    readonly usage: AgentUsage;
+} | {
+    readonly type: "turn_start";
+    readonly span: string;
+    readonly label?: string;
+} | {
+    readonly type: "foom_call";
+    readonly span: string;
+    readonly method: string;
+} | {
+    readonly type: "repair";
+    readonly span: string;
+    readonly attempt: number;
+} | {
+    readonly type: "log";
+    readonly span: string;
+    readonly message: string;
+    readonly level: "info" | "warn" | "error";
+} | {
+    readonly type: "annotate";
+    readonly span: string;
+    readonly attributes: Record<string, unknown>;
+} | {
+    readonly type: "turn_meta";
+    readonly span: string;
+    readonly systemPrompt: string;
+} | {
+    readonly type: "user_prompt";
+    readonly span: string;
+    readonly text: string;
+} | {
+    readonly type: "msg_start";
+    readonly span: string;
+} | {
+    readonly type: "msg_text";
+    readonly span: string;
+    readonly delta: string;
+} | {
+    readonly type: "msg_thinking";
+    readonly span: string;
+    readonly delta: string;
+} | {
+    readonly type: "msg_end";
+    readonly span: string;
+} | {
+    readonly type: "tool_start";
+    readonly span: string;
+    readonly callId: string;
+    readonly name: string;
+    readonly args: unknown;
+} | {
+    readonly type: "tool_end";
+    readonly span: string;
+    readonly callId: string;
+    readonly content: string;
+    readonly isError: boolean;
+};
+
+// @public
 export type AgentExposeDecorator = AgentMethodDecorator & ((options?: AgentExposeOptions) => AgentMethodDecorator);
 
 // @public
@@ -63,7 +132,7 @@ export interface AgentExposeOptions {
 export type AgentMethodDecorator = <This, Args extends readonly unknown[], Return>(value: (this: This, ...args: Args) => Return, context: ClassMethodDecoratorContext<This, (this: This, ...args: Args) => Return>) => ((this: This, ...args: Args) => Return) | undefined;
 
 // @public
-export type AgentOptions = AgentConfig & AgentRuntimeHooks & AgentCancellation & AgentTurnMeta;
+export type AgentOptions = AgentConfig & AgentRunHooks & AgentCancellation & AgentTurnMeta;
 
 // @public
 export interface AgentProgramContext<TProgram extends object> extends AgentRun {
@@ -96,7 +165,7 @@ export interface AgentRun {
 }
 
 // @public
-export interface AgentRuntimeHooks {
+export interface AgentRunHooks {
     // (undocumented)
     onToken?: (token: LLMToken) => void;
 }
@@ -167,7 +236,7 @@ export const CONTROL_TOOLS: {
     readonly inspect: "foom_inspect";
 };
 
-// @public (undocumented)
+// @public
 export type ControlToolName = (typeof CONTROL_TOOLS)[keyof typeof CONTROL_TOOLS];
 
 // @public
@@ -196,42 +265,42 @@ export function durationToMs(duration: Duration): number | undefined;
 export const foom: AgentDecorators;
 
 // @public
-export class FoomtimeAbortError extends FoomtimeError {
+export class FoomAbortError extends FoomError {
 }
 
 // @public
-export class FoomtimeBudgetExceededError extends FoomtimeError {
+export class FoomBudgetExceededError extends FoomError {
 }
 
 // @public
-export class FoomtimeCallDepthError extends FoomtimeError {
+export class FoomCallDepthError extends FoomError {
 }
 
 // @public
-export class FoomtimeCancelledError extends FoomtimeAbortError {
+export class FoomCancelledError extends FoomAbortError {
 }
 
 // @public
-export class FoomtimeConcurrencyError extends FoomtimeError {
+export class FoomConcurrencyError extends FoomError {
 }
 
 // @public
-export class FoomtimeConfigError extends FoomtimeError {
+export class FoomConfigError extends FoomError {
 }
 
 // @public
-export class FoomtimeDispatchError extends FoomtimeError {
+export class FoomDispatchError extends FoomError {
 }
 
 // @public
-export class FoomtimeError extends Error {
-    constructor(message: string, options?: FoomtimeErrorOptions);
+export class FoomError extends Error {
+    constructor(message: string, options?: FoomErrorOptions);
     // (undocumented)
     readonly data?: unknown;
 }
 
 // @public
-export interface FoomtimeErrorOptions {
+export interface FoomErrorOptions {
     // (undocumented)
     cause?: unknown;
     // (undocumented)
@@ -239,30 +308,30 @@ export interface FoomtimeErrorOptions {
 }
 
 // @public
-export abstract class FoomtimeHarnessError extends FoomtimeError {
+export abstract class FoomHarnessError extends FoomError {
     abstract readonly retryable: boolean;
     readonly status?: number;
 }
 
 // @public
-export class FoomtimeHarnessRejectedError extends FoomtimeHarnessError {
+export class FoomHarnessRejectedError extends FoomHarnessError {
     // (undocumented)
     readonly retryable = false;
 }
 
 // @public
-export class FoomtimeHarnessUnavailableError extends FoomtimeHarnessError {
+export class FoomHarnessUnavailableError extends FoomHarnessError {
     // (undocumented)
     readonly retryable = true;
     readonly retryAfterMs?: number;
 }
 
 // @public
-export class FoomtimeInputError extends FoomtimeError {
+export class FoomInputError extends FoomError {
 }
 
 // @public
-export abstract class FoomtimeProgram<I = string[], R = unknown> {
+export abstract class FoomProgram<I = string[], R = unknown> {
     // (undocumented)
     protected get agent(): AgentProgramContext<this>;
     // (undocumented)
@@ -274,25 +343,25 @@ export abstract class FoomtimeProgram<I = string[], R = unknown> {
 }
 
 // @public
-export class FoomtimeRepairExhaustedError extends FoomtimeError {
-    constructor(message: string, channel: RepairChannel, options?: FoomtimeErrorOptions);
+export class FoomRepairExhaustedError extends FoomError {
+    constructor(message: string, channel: RepairChannel, options?: FoomErrorOptions);
     // (undocumented)
     readonly channel: RepairChannel;
 }
 
 // @public
-export class FoomtimeThrowError extends FoomtimeError {
-    constructor(message: string, code: string, options?: FoomtimeErrorOptions);
+export class FoomThrowError extends FoomError {
+    constructor(message: string, code: string, options?: FoomErrorOptions);
     // (undocumented)
     readonly code: string;
 }
 
 // @public
-export class FoomtimeTimeoutError extends FoomtimeAbortError {
+export class FoomTimeoutError extends FoomAbortError {
 }
 
 // @public
-export class FoomtimeTokenLimitExceededError extends FoomtimeError {
+export class FoomTokenLimitExceededError extends FoomError {
 }
 
 // @public
@@ -353,13 +422,13 @@ export interface NeutralToolDef {
 export type OpenSession = (options: HarnessSessionOptions) => Promise<HarnessSession> | HarnessSession;
 
 // @public
-export function Program<S extends StandardSchemaV1, R = unknown>(input: S): abstract new () => FoomtimeProgram<StandardSchemaV1.InferOutput<S>, R>;
+export function Program<S extends StandardSchemaV1, R = unknown>(input: S): abstract new () => FoomProgram<StandardSchemaV1.InferOutput<S>, R>;
 
 // @public
 export type RepairChannel = "args" | "return" | "dispatch";
 
 // @public
-export function runProgram<P extends FoomtimeProgram<never, unknown>>(ProgramClass: abstract new () => P, rawInput: unknown, options: RunProgramOptions): Promise<Awaited<ReturnType<P["main"]>>>;
+export function runProgram<P extends FoomProgram<never, unknown>>(ProgramClass: abstract new () => P, rawInput: unknown, options: RunProgramOptions): Promise<Awaited<ReturnType<P["main"]>>>;
 
 // @public
 export interface RunProgramOptions {
@@ -369,7 +438,6 @@ export interface RunProgramOptions {
     readonly harnesses: Record<string, OpenSession>;
     // (undocumented)
     readonly model: string;
-    // Warning: (ae-forgotten-export) The symbol "AgentEvent" needs to be exported by the entry point index.d.ts
     readonly onEvent?: (event: AgentEvent) => void;
     // (undocumented)
     readonly signal?: AbortSignal;

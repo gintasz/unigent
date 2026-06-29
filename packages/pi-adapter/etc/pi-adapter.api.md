@@ -13,8 +13,8 @@ import { StreamFn } from '@earendil-works/pi-agent-core';
 // @public
 export function createPiOpenSession(options?: PiSessionOptions): OpenSession;
 
-// @public (undocumented)
-export const PI_HARNESS_VERSION = "0.1.0";
+// @public
+export const PI_VERSION = "0.1.0";
 
 // @public
 export interface PiSessionOptions {
@@ -25,7 +25,5 @@ export interface PiSessionOptions {
     readonly streamFn?: StreamFn;
     readonly tools?: readonly AgentTool[];
 }
-
-// (No @packageDocumentation comment for this package)
 
 ```

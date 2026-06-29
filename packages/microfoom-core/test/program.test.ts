@@ -186,7 +186,7 @@ describe("program facade (end to end, fake session)", () => {
     expect(out).toBe(5);
   });
 
-  it("surfaces foom_throw as a thrown FoomtimeThrowError carrying the code", async () => {
+  it("surfaces foom_throw as a thrown FoomThrowError carrying the code", async () => {
     class Thrower extends Program<typeof stringInput, number>(stringInput) {
       async main(): Promise<number> {
         return await this.agent.value(numberSchema)`fail please`;
@@ -199,7 +199,7 @@ describe("program facade (end to end, fake session)", () => {
         ]),
         model: "fake",
       }),
-    ).rejects.toMatchObject({ name: "FoomtimeThrowError", code: "E_NOPE" });
+    ).rejects.toMatchObject({ name: "FoomThrowError", code: "E_NOPE" });
   });
 
   it("runs a stateful session across turns", async () => {

@@ -98,7 +98,7 @@ export interface SessionTurnResult {
  * The PUBLIC harness contract (F6). A session runs one model turn:
  * it drives the model, executes the supplied tools (calling their `execute`), and
  * resolves when the turn settles (a tool signalled `terminate`, or the model
- * produced no tool call). Signal failures by throwing FoomtimeHarnessError
+ * produced no tool call). Signal failures by throwing FoomHarnessError
  * subclasses; honor `request.signal`.
  */
 export interface HarnessSession {
@@ -115,7 +115,7 @@ export interface HarnessSession {
    * Branch this session: return a NEW session seeded with a copy of the current
    * transcript, diverging independently from here (backs AgentSession.fork()).
    * Optional — a harness that can't clone its conversation state omits it, and
-   * core's fork() then throws FoomtimeConfigError.
+   * core's fork() then throws FoomConfigError.
    */
   fork?(): HarnessSession;
 }

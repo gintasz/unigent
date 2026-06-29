@@ -4,10 +4,10 @@
 // vitest e2e exclude); run it with `pnpm test:e2e`.
 //
 // Skip vs. fail is deliberate: only a harness/provider failure (no credentials,
-// connection down) skips — a behavior mismatch is NOT a FoomtimeHarnessError, so a
+// connection down) skips — a behavior mismatch is NOT a FoomHarnessError, so a
 // real regression in protocol compliance still fails loudly.
 
-import { FoomtimeHarnessError } from "@microfoom/core";
+import { FoomHarnessError } from "@microfoom/core";
 import { describe, it } from "vitest";
 import { adapters, piE2EAdapter } from "./support/adapters.ts";
 import { claudecliE2EAdapter } from "./support/claudecli.ts";
@@ -22,7 +22,7 @@ for (const adapter of adapters) {
         try {
           await fixture.exec(adapter.live, "live");
         } catch (error) {
-          if (error instanceof FoomtimeHarnessError) {
+          if (error instanceof FoomHarnessError) {
             console.warn(`[live skipped — provider] ${fixture.name}: ${error.message}`);
             return;
           }
@@ -50,7 +50,7 @@ describe("two adapters in one program (live)", () => {
       });
       assertTwoHarness(out);
     } catch (error) {
-      if (error instanceof FoomtimeHarnessError) {
+      if (error instanceof FoomHarnessError) {
         console.warn(`[live skipped — provider] two-adapter: ${error.message}`);
         return;
       }

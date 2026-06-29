@@ -1,41 +1,41 @@
 // Public error taxonomy (F7). These are the thrown, consumer-facing classes at
 // the Promise/exception facade (F6) — plain Error subclasses.
-// Every failure is a subclass of FoomtimeError, discriminated by `instanceof`.
+// Every failure is a subclass of FoomError, discriminated by `instanceof`.
 //
-//   FoomtimeError                      base for all of the below
-//   ├─ FoomtimeThrowError              deliberate `foom_throw` in a prompt; ALWAYS carries user `code`
-//   ├─ FoomtimeAbortError              run ended early
-//   │  ├─ FoomtimeTimeoutError         exceeded maxTurnDuration (turn) or maxProgramDuration (program)
-//   │  └─ FoomtimeCancelledError       aborted via signal / .abort()
-//   ├─ FoomtimeBudgetExceededError     exceeded maxBudgetUsd
-//   ├─ FoomtimeTokenLimitExceededError exceeded maxOutputTokens
-//   ├─ FoomtimeCallDepthError          exceeded maxCallDepth
-//   ├─ FoomtimeRepairExhaustedError    repair loop gave up; `.channel` names the fault
-//   ├─ FoomtimeHarnessError            boundary failure; split by retryability
-//   │  ├─ FoomtimeHarnessUnavailableError  transient — disconnect / 5xx / rate-limit (retryable)
-//   │  └─ FoomtimeHarnessRejectedError     non-transient — permission / model-not-allowed / overflow
-//   ├─ FoomtimeConfigError             bad config (no such model, invalid thinking, ...)
-//   ├─ FoomtimeInputError              /run input failed the program's input schema
-//   ├─ FoomtimeDispatchError           exposed method has no implementation on the instance (defect)
-//   └─ FoomtimeConcurrencyError        overlapping turns on one session (programming error)
+//   FoomError                      base for all of the below
+//   ├─ FoomThrowError              deliberate `foom_throw` in a prompt; ALWAYS carries user `code`
+//   ├─ FoomAbortError              run ended early
+//   │  ├─ FoomTimeoutError         exceeded maxTurnDuration (turn) or maxProgramDuration (program)
+//   │  └─ FoomCancelledError       aborted via signal / .abort()
+//   ├─ FoomBudgetExceededError     exceeded maxBudgetUsd
+//   ├─ FoomTokenLimitExceededError exceeded maxOutputTokens
+//   ├─ FoomCallDepthError          exceeded maxCallDepth
+//   ├─ FoomRepairExhaustedError    repair loop gave up; `.channel` names the fault
+//   ├─ FoomHarnessError            boundary failure; split by retryability
+//   │  ├─ FoomHarnessUnavailableError  transient — disconnect / 5xx / rate-limit (retryable)
+//   │  └─ FoomHarnessRejectedError     non-transient — permission / model-not-allowed / overflow
+//   ├─ FoomConfigError             bad config (no such model, invalid thinking, ...)
+//   ├─ FoomInputError              /run input failed the program's input schema
+//   ├─ FoomDispatchError           exposed method has no implementation on the instance (defect)
+//   └─ FoomConcurrencyError        overlapping turns on one session (programming error)
 //
 // Repairable agent faults — bad `foom_call` args, a call to an unexposed method, a
 // `foom_return` whose value fails its schema, a turn that omits `foom_return` — are
 // NOT thrown when they happen. The runtime feeds each back to the model in-band as
 // an error tool-result and re-prompts, up to `repairAttempts` (E1/E3). They surface
-// as one exception only once repair is exhausted: FoomtimeRepairExhaustedError,
+// as one exception only once repair is exhausted: FoomRepairExhaustedError,
 // whose `.channel` ("args" | "return" | "dispatch") names the fault that exhausted.
 
-/** Options accepted by every Foomtime error: an underlying cause and free-form data. */
-export interface FoomtimeErrorOptions {
+/** Options accepted by every Foom error: an underlying cause and free-form data. */
+export interface FoomErrorOptions {
   cause?: unknown;
   data?: unknown;
 }
 
 /** Base for the whole taxonomy. Each subclass reports its own class name. */
-export class FoomtimeError extends Error {
+export class FoomError extends Error {
   public readonly data?: unknown;
-  public constructor(message: string, options?: FoomtimeErrorOptions) {
+  public constructor(message: string, options?: FoomErrorOptions) {
     super(message, { cause: options?.cause });
     this.name = new.target.name;
     this.data = options?.data;
@@ -46,29 +46,29 @@ export class FoomtimeError extends Error {
  * Raised ONLY by a deliberate `foom_throw` in a prompt. ALWAYS carries the
  * user-defined `code` from `foom_throw` (the caller's namespace, e.g. "123" /
  * "E_TOO_LOW"); it has no runtime meaning. Runtime-caught failures are
- * FoomtimeRepairExhaustedError, NOT this — they have no `code`.
+ * FoomRepairExhaustedError, NOT this — they have no `code`.
  */
-export class FoomtimeThrowError extends FoomtimeError {
+export class FoomThrowError extends FoomError {
   public readonly code: string;
-  public constructor(message: string, code: string, options?: FoomtimeErrorOptions) {
+  public constructor(message: string, code: string, options?: FoomErrorOptions) {
     super(message, options);
     this.code = code;
   }
 }
 
 /** Run ended early. */
-export class FoomtimeAbortError extends FoomtimeError {}
+export class FoomAbortError extends FoomError {}
 /** Exceeded maxTurnDuration (turn) or maxProgramDuration (program). */
-export class FoomtimeTimeoutError extends FoomtimeAbortError {}
+export class FoomTimeoutError extends FoomAbortError {}
 /** Aborted via signal / .abort(). */
-export class FoomtimeCancelledError extends FoomtimeAbortError {}
+export class FoomCancelledError extends FoomAbortError {}
 
 /** Exceeded maxBudgetUsd. */
-export class FoomtimeBudgetExceededError extends FoomtimeError {}
+export class FoomBudgetExceededError extends FoomError {}
 /** Exceeded maxOutputTokens. */
-export class FoomtimeTokenLimitExceededError extends FoomtimeError {}
+export class FoomTokenLimitExceededError extends FoomError {}
 /** Exceeded maxCallDepth. */
-export class FoomtimeCallDepthError extends FoomtimeError {}
+export class FoomCallDepthError extends FoomError {}
 /** Which repairable agent fault exhausted the repair loop. */
 export type RepairChannel = "args" | "return" | "dispatch";
 /**
@@ -77,9 +77,9 @@ export type RepairChannel = "args" | "return" | "dispatch";
  * `foom_return` value that failed its schema, or a turn that never returned), or
  * "dispatch" (a call to an unexposed method).
  */
-export class FoomtimeRepairExhaustedError extends FoomtimeError {
+export class FoomRepairExhaustedError extends FoomError {
   public readonly channel: RepairChannel;
-  public constructor(message: string, channel: RepairChannel, options?: FoomtimeErrorOptions) {
+  public constructor(message: string, channel: RepairChannel, options?: FoomErrorOptions) {
     super(message, options);
     this.channel = channel;
   }
@@ -90,33 +90,33 @@ export class FoomtimeRepairExhaustedError extends FoomtimeError {
  * harness and delegates turns to it, so this is the boundary-failure class —
  * origin (provider vs harness internals) is often indistinguishable from here.
  */
-export abstract class FoomtimeHarnessError extends FoomtimeError {
+export abstract class FoomHarnessError extends FoomError {
   /** HTTP-ish status, if the harness surfaced one. */
   public readonly status?: number;
   /** True when retrying the same turn may succeed — the only thing a catcher needs. */
   public abstract readonly retryable: boolean;
 }
 /** Transient: harness disconnected, model 5xx, rate-limited. Safe to retry. */
-export class FoomtimeHarnessUnavailableError extends FoomtimeHarnessError {
+export class FoomHarnessUnavailableError extends FoomHarnessError {
   public readonly retryable = true;
   /** Honor a harness/provider backoff hint, if any. */
   public readonly retryAfterMs?: number;
 }
 /** Non-transient: permission denied, model not allowed, context overflow, content filtered. */
-export class FoomtimeHarnessRejectedError extends FoomtimeHarnessError {
+export class FoomHarnessRejectedError extends FoomHarnessError {
   public readonly retryable = false;
 }
 
 /** Bad config (no such model, invalid thinking, unenforceable cap, ...). */
-export class FoomtimeConfigError extends FoomtimeError {}
+export class FoomConfigError extends FoomError {}
 /** /run input failed the program's input schema. */
-export class FoomtimeInputError extends FoomtimeError {}
+export class FoomInputError extends FoomError {}
 /**
  * An exposed method has no callable implementation on the program instance —
  * contradictory program state (a defect), not an agent-repairable miss, so it fails
  * fast rather than entering the repair loop. A call to an *unexposed* method is
  * repairable and is handled in-band (see the header note); it never reaches here.
  */
-export class FoomtimeDispatchError extends FoomtimeError {}
+export class FoomDispatchError extends FoomError {}
 /** Overlapping turns on one session — a programming error, not repairable/retryable. */
-export class FoomtimeConcurrencyError extends FoomtimeError {}
+export class FoomConcurrencyError extends FoomError {}

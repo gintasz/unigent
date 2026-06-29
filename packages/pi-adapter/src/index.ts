@@ -1,3 +1,10 @@
+/**
+ * `@microfoom/pi-adapter` — runs a microfoom program as a programmatic pi agent,
+ * binding core's harness port to pi's stream function, tools, skills, and plugins.
+ *
+ * @packageDocumentation
+ */
+
 // The pi harness adapter: the sole binding between core's harness port
 // (OpenSession/HarnessSession) and pi's runtime. microfoom programs run as a
 // programmatic pi agent: each turn drives a pi-agent-core `Agent` whose loop owns
@@ -40,8 +47,8 @@ import {
   type Skill,
 } from "@earendil-works/pi-coding-agent";
 import {
-  FoomtimeHarnessRejectedError,
-  FoomtimeHarnessUnavailableError,
+  FoomHarnessRejectedError,
+  FoomHarnessUnavailableError,
   type HarnessSession,
   type HarnessSessionOptions,
   type NeutralToolDef,
@@ -54,7 +61,8 @@ import {
 import { Type } from "typebox";
 import { dumpPayloadFile, logFileFromEnv } from "./env.js";
 
-export const PI_HARNESS_VERSION = "0.1.0";
+/** The version of `@microfoom/pi-adapter` this build was published at. */
+export const PI_VERSION = "0.1.0";
 
 const PI_THINKING: ReadonlySet<string> = new Set([
   "off",
@@ -219,9 +227,9 @@ function resolveThinking(thinking: string | undefined): ThinkingLevel {
 
 /** This turn's tools: harness tools narrowed by request.allowedTools (undefined =
  *  all, [] = none), then the always-exposed per-turn FOOM tools. */
-function selectTurnTools(runtime: PiRuntime, request: SessionTurnRequest): AgentTool[] {
+function selectTurnTools(wiring: PiSessionWiring, request: SessionTurnRequest): AgentTool[] {
   const allowed = request.allowedTools;
-  const harnessTools = (runtime.harnessTools ?? []).filter(
+  const harnessTools = (wiring.harnessTools ?? []).filter(
     (tool) => allowed === undefined || allowed.includes(tool.name),
   );
   return [...harnessTools, ...request.tools.map(toAgentTool)];
@@ -264,7 +272,7 @@ function collectTurnResult(newMessages: readonly AgentMessage[]): SessionTurnRes
   for (const message of newMessages) {
     if (message.role !== "assistant") continue;
     if (message.stopReason === "error") {
-      throw new FoomtimeHarnessUnavailableError(message.errorMessage ?? "model error");
+      throw new FoomHarnessUnavailableError(message.errorMessage ?? "model error");
     }
     text = assistantText(message);
     usage = addUsage(usage, message.usage);
@@ -292,7 +300,7 @@ export interface PiSessionOptions {
   readonly tools?: readonly AgentTool[];
 }
 
-interface PiRuntime {
+interface PiSessionWiring {
   readonly streamFn: StreamFn;
   readonly registry?: ModelRegistry;
   /** pi's configured base system prompt (persona + project context); microfoom's
@@ -371,8 +379,8 @@ async function buildResourceLoader(
 
 /** A stable cache key for one (allowedSkills, allowedPlugins) pair. `*` = all
  *  (undefined), `-` = none ([]), else the sorted names — so the tri-state and order
- *  don't spawn redundant runtimes. */
-function runtimeKey(
+ *  don't spawn redundant wirings. */
+function wiringKey(
   allowedSkills: readonly string[] | undefined,
   allowedPlugins: readonly string[] | undefined,
 ): string {
@@ -382,7 +390,10 @@ function runtimeKey(
 }
 
 /** Default `id → Model` lookup: split "provider/name" and ask the registry. */
-function defaultResolveModel(registry: PiRuntime["registry"], id: string): Model<Api> | undefined {
+function defaultResolveModel(
+  registry: PiSessionWiring["registry"],
+  id: string,
+): Model<Api> | undefined {
   const slash = id.indexOf("/");
   const provider = slash >= 0 ? id.slice(0, slash) : id;
   const name = slash >= 0 ? id.slice(slash + 1) : id;
@@ -391,7 +402,7 @@ function defaultResolveModel(registry: PiRuntime["registry"], id: string): Model
 
 /** What one pi-backed harness session needs from its creating OpenSession. */
 interface SessionDeps {
-  readonly runtime: PiRuntime;
+  readonly wiring: PiSessionWiring;
   readonly model: Model<Api>;
   readonly logFile: string | undefined;
 }
@@ -400,9 +411,9 @@ interface SessionDeps {
  *  transcript, so a microfoom session() is a continued conversation. Stateless
  *  this.agent turns open a fresh session (fresh Agent) each time. A session
  *  seeded with prior messages is a fork() branch. Base-prompt omission is applied
- *  per turn (request.omitBasePrompt), defaulting to runtime.omitBaseDefault. */
+ *  per turn (request.omitBasePrompt), defaulting to wiring.omitBaseDefault. */
 function makePiHarnessSession(deps: SessionDeps, seed?: readonly AgentMessage[]): HarnessSession {
-  const { runtime, model, logFile } = deps;
+  const { wiring, model, logFile } = deps;
   let agent: Agent | undefined;
 
   // Create the per-session Agent on first turn (seeding a fork's transcript), or
@@ -416,7 +427,7 @@ function makePiHarnessSession(deps: SessionDeps, seed?: readonly AgentMessage[])
     if (agent === undefined) {
       agent = new Agent({
         initialState: { systemPrompt, model, thinkingLevel, tools },
-        streamFn: runtime.streamFn,
+        streamFn: wiring.streamFn,
         convertToLlm: (messages: AgentMessage[]): Message[] =>
           messages.filter(
             (message): message is Message =>
@@ -440,18 +451,18 @@ function makePiHarnessSession(deps: SessionDeps, seed?: readonly AgentMessage[])
     // The model receives pi's base prompt with the program prompt appended.
     systemPrompt(programPrompt: string): string {
       return composeSystemPrompt(
-        runtime.omitBaseDefault ? undefined : runtime.basePrompt,
+        wiring.omitBaseDefault ? undefined : wiring.basePrompt,
         programPrompt,
       );
     },
     async runTurn(request: SessionTurnRequest): Promise<SessionTurnResult> {
       const thinkingLevel = resolveThinking(request.thinking);
-      const tools = selectTurnTools(runtime, request);
+      const tools = selectTurnTools(wiring, request);
       // Drop pi's base prompt for this turn when the scope asked to (or the
       // construction default does); core threads it as request.omitBasePrompt.
-      const omitBase = request.omitBasePrompt ?? runtime.omitBaseDefault;
+      const omitBase = request.omitBasePrompt ?? wiring.omitBaseDefault;
       const systemPrompt = composeSystemPrompt(
-        omitBase ? undefined : runtime.basePrompt,
+        omitBase ? undefined : wiring.basePrompt,
         request.systemPrompt,
       );
       const activeAgent = ensureAgent(systemPrompt, thinkingLevel, tools);
@@ -509,15 +520,15 @@ export function createPiOpenSession(options: PiSessionOptions = {}): OpenSession
   ): readonly AgentTool[] | undefined => options.tools ?? piTools;
 
   // skills/plugins arrive PER session-open (resolved from the scope's merged config —
-  // see core's openOptions), so the resolved runtime is memoized per set, not once.
+  // see core's openOptions), so the resolved wiring is memoized per set, not once.
   // The model registry is heavy and set-independent, so it's shared.
-  const runtimeCache = new Map<string, Promise<PiRuntime>>();
+  const wiringCache = new Map<string, Promise<PiSessionWiring>>();
   let sharedRegistry: ReturnType<typeof ModelRegistry.create> | undefined;
 
-  const buildRuntime = async (
+  const buildWiring = async (
     allowedSkills: readonly string[] | undefined,
     allowedPlugins: readonly string[] | undefined,
-  ): Promise<PiRuntime> => {
+  ): Promise<PiSessionWiring> => {
     if (options.streamFn !== undefined) {
       return {
         streamFn: options.streamFn,
@@ -559,13 +570,13 @@ export function createPiOpenSession(options: PiSessionOptions = {}): OpenSession
   const initFor = (
     allowedSkills: readonly string[] | undefined,
     allowedPlugins: readonly string[] | undefined,
-    // eslint-disable-next-line @typescript-eslint/promise-function-async -- returns the cached runtime promise by identity (single-flight); `async` would allocate a fresh wrapper each call.
-  ): Promise<PiRuntime> => {
-    const key = runtimeKey(allowedSkills, allowedPlugins);
-    let pending = runtimeCache.get(key);
+    // eslint-disable-next-line @typescript-eslint/promise-function-async -- returns the cached wiring promise by identity (single-flight); `async` would allocate a fresh wrapper each call.
+  ): Promise<PiSessionWiring> => {
+    const key = wiringKey(allowedSkills, allowedPlugins);
+    let pending = wiringCache.get(key);
     if (pending === undefined) {
-      pending = buildRuntime(allowedSkills, allowedPlugins);
-      runtimeCache.set(key, pending);
+      pending = buildWiring(allowedSkills, allowedPlugins);
+      wiringCache.set(key, pending);
     }
     return pending;
   };
@@ -575,14 +586,14 @@ export function createPiOpenSession(options: PiSessionOptions = {}): OpenSession
     skills,
     plugins,
   }: HarnessSessionOptions): Promise<HarnessSession> => {
-    const runtime = await initFor(skills, plugins);
+    const wiring = await initFor(skills, plugins);
     const resolveModel =
-      options.resolveModel ?? ((id: string) => defaultResolveModel(runtime.registry, id));
+      options.resolveModel ?? ((id: string) => defaultResolveModel(wiring.registry, id));
     const model: Model<Api> | undefined = resolveModel(modelId);
     if (model === undefined) {
-      throw new FoomtimeHarnessRejectedError(`unknown model: ${modelId}`);
+      throw new FoomHarnessRejectedError(`unknown model: ${modelId}`);
     }
 
-    return makePiHarnessSession({ runtime, model, logFile });
+    return makePiHarnessSession({ wiring, model, logFile });
   };
 }

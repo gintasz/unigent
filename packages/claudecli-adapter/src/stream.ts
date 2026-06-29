@@ -20,7 +20,7 @@ const asNumber = (value: unknown): number => (typeof value === "number" ? value 
 const asString = (value: unknown): string | undefined =>
   typeof value === "string" ? value : undefined;
 
-/** Why a turn ended badly (mapped to a FoomtimeHarnessError by the caller). */
+/** Why a turn ended badly (mapped to a FoomHarnessError by the caller). */
 interface TurnError {
   readonly message: string;
   /** Whether retrying could plausibly succeed (transient model/network/rate-limit). */

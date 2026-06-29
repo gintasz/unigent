@@ -7,7 +7,7 @@
 ## Context
 
 The agent affects the program only through a fixed set of structured control
-operations surfaced as native function-calling (F2), never string-matched. Exposed
+tools surfaced as native function-calling (F2), never string-matched. Exposed
 methods are advertised in tiers that differ by context cost (F3). Returns are
 validated against a Standard Schema; the library commits to no concrete validator
 (F4). The open question: how is the model-facing parameter schema for an exposed
@@ -16,8 +16,8 @@ the provider needs JSON Schema upfront?
 
 ## Decision
 
-### Control operations → native tools (F2)
-Four control ops are native tools whose semantics live in core (`tools.ts`) and
+### Control tools (F2)
+Four control tools whose semantics live in core (`tools.ts`) and
 are executed by the harness loop (ADR-0002), never parsed from text:
 - **`foom_call`** — invoke an exposed method (by name + args). Generic tool for the
   silent/announcement tiers; the `{ tool }` tier additionally gets its own native
@@ -25,7 +25,7 @@ are executed by the harness loop (ADR-0002), never parsed from text:
 - **`foom_return`** — terminal structured return; its value is validated against the
   call's Standard Schema (F4) and ends the turn.
 - **`foom_throw`** — deliberate program error carrying a caller-defined `code`
-  (→ `FoomtimeThrowError`, F7).
+  (→ `FoomThrowError`, F7).
 - **`foom_inspect`** — returns an exposed method's parameter schema on demand.
 
 ### Exposure tiers (F3) — agent-unreachable by default

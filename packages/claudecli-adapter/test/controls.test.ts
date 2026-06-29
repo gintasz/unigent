@@ -2,9 +2,10 @@
 // (`enabledPlugins` via `--settings`, all-skills-off via `--disable-slash-commands`),
 // the argv serialization, and the end-to-end wiring from run config to the spec.
 
-import { FoomtimeConfigError, makeStandardSchema, Program, runProgram } from "@microfoom/core";
+import { FoomConfigError, makeStandardSchema, Program, runProgram } from "@microfoom/core";
 import { describe, expect, it } from "vitest";
-import { buildSessionControls, createClaudeCliOpenSession } from "../src/index.ts";
+import { buildSessionControls } from "../src/controls.ts";
+import { createClaudeCliOpenSession } from "../src/index.ts";
 import { buildArgs, type ClaudeProcessFactory, type ClaudeSpec } from "../src/process.ts";
 import { fakeClaudeFactory } from "./support/fake_claude.ts";
 
@@ -42,7 +43,7 @@ describe("buildSessionControls (config → Claude settings)", () => {
   });
 
   it("a skills allow-list is unsupported and throws", () => {
-    expect(() => buildSessionControls(["deploy"], undefined)).toThrow(FoomtimeConfigError);
+    expect(() => buildSessionControls(["deploy"], undefined)).toThrow(FoomConfigError);
   });
 });
 
@@ -109,7 +110,7 @@ describe("config reaches the claude subprocess (offline)", () => {
     expect(seen()?.disableSlashCommands).toBe(true);
   });
 
-  it("a skills allow-list fails the run with FoomtimeConfigError", async () => {
+  it("a skills allow-list fails the run with FoomConfigError", async () => {
     const { openSession } = capturingHarness();
     await expect(
       runProgram(Echo, "x", {
@@ -117,7 +118,7 @@ describe("config reaches the claude subprocess (offline)", () => {
         model: "sonnet",
         defaults: { tools: [], skills: ["deploy"] },
       }),
-    ).rejects.toBeInstanceOf(FoomtimeConfigError);
+    ).rejects.toBeInstanceOf(FoomConfigError);
   });
 
   it("omitHarnessBasePrompt=false keeps Claude's base (appendSystemPrompt true)", async () => {

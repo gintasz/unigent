@@ -10,7 +10,7 @@ export type LLMToken =
   | { readonly type: "reasoning"; readonly text: string };
 
 /** Per-call runtime hooks (not part of the inheritable config cascade). */
-export interface AgentRuntimeHooks {
+export interface AgentRunHooks {
   onToken?: (token: LLMToken) => void;
 }
 
@@ -26,7 +26,7 @@ export interface AgentTurnMeta {
 }
 
 /** Everything accepted at a call/scope: cascading config plus per-call extras. */
-export type AgentOptions = AgentConfig & AgentRuntimeHooks & AgentCancellation & AgentTurnMeta;
+export type AgentOptions = AgentConfig & AgentRunHooks & AgentCancellation & AgentTurnMeta;
 
 /** Structured tool advertisement — the value of `@foom.expose({ tool })`. */
 export interface AgentToolOptions {

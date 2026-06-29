@@ -2,7 +2,7 @@
   "name": "@microfoom/core",
   "version": "0.1.0",
   "type": "module",
-  "description": "Typed building blocks for coordination engineering: orchestrate many agents across model harnesses from durable TypeScript.",
+  "description": "Core of the microfoom framework: the agent runtime + typed building blocks for coordinating many agents across model harnesses from durable TypeScript.",
   "keywords": [
     "agents",
     "llm",

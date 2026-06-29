@@ -8,7 +8,7 @@
 
 import type { StandardSchemaV1 } from "@standard-schema/spec";
 import ts from "typescript";
-import { FoomtimeConfigError } from "./errors.js";
+import { FoomConfigError } from "./errors.js";
 import type { JsonSchema } from "./session.js";
 import { makeStandardSchema } from "./standard_schema.js";
 
@@ -175,7 +175,7 @@ function compileSource(filePath: string): { checker: ts.TypeChecker; source: ts.
   });
   const source = program.getSourceFile(filePath);
   if (source === undefined) {
-    throw new FoomtimeConfigError(`Cannot read program source for derivation: ${filePath}`);
+    throw new FoomConfigError(`Cannot read program source for derivation: ${filePath}`);
   }
   return { checker: program.getTypeChecker(), source };
 }
@@ -255,7 +255,7 @@ export function deriveMethodParameters(
   const { checker, source } = compileSource(filePath);
   const method = findMethod(source, className, methodName);
   if (method === undefined) {
-    throw new FoomtimeConfigError(`Method ${className}.${methodName} not found in ${filePath}`);
+    throw new FoomConfigError(`Method ${className}.${methodName} not found in ${filePath}`);
   }
   return buildDerived(method, checker, source);
 }
@@ -269,7 +269,7 @@ export function deriveProgramInput(filePath: string): DerivedParameters {
   const { checker, source } = compileSource(filePath);
   const method = findDefaultExportMain(source);
   if (method === undefined) {
-    throw new FoomtimeConfigError(
+    throw new FoomConfigError(
       `${filePath} must \`export default class … extends Program(...)\` with a main() method`,
     );
   }

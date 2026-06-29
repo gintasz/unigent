@@ -20,6 +20,10 @@ const FAKE_USAGE: UsageDelta = {
   costUsd: 0,
 };
 
+/** An offline `OpenSession` that echoes the authored prompt and drives the
+ *  same transcript stream a real harness would (reasoning / prose / tool events),
+ *  so the panel and TUI work with no model. */
+
 export function fakeOpenSession(): OpenSession {
   let calls = 0;
   const session: HarnessSession = {

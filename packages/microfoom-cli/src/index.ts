@@ -2,6 +2,16 @@
 // renderer, panel, loader and fake session are exported so other frontends/tests
 // can reuse them. Re-exports are explicit (no `export *`).
 
+/**
+ * `@microfoom/cli` — the CLI runner plus its reusable building blocks (renderer,
+ * panel, program loader, fake session) for other frontends and tests.
+ *
+ * @packageDocumentation
+ */
+
+/** The version of `@microfoom/cli` this build was published at. */
+export const CLI_VERSION = "0.1.0";
+
 export { fakeOpenSession } from "./fake.js";
 export {
   fmtCost,
