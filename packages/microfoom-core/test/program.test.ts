@@ -164,7 +164,9 @@ describe("program facade (end to end, fake session)", () => {
       | undefined;
     expect(params?.properties?.value).toMatchObject({ type: "object", required: ["name"] });
     expect(request?.prompt).toContain("<!-- microfoom:begin -->");
-    expect(request?.prompt).toContain("You must end this turn by calling the foom_return tool");
+    expect(request?.prompt).toContain(
+      "The user instruction expected you to end this turn with a foom_return tool call passing the result",
+    );
     expect(request?.prompt).toContain("foom_throw");
   });
 
