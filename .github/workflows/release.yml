@@ -45,11 +45,26 @@ jobs:
 
       - run: pnpm run test
 
+      # Guard publishing on NPM_TOKEN presence. Without it, changeset publish
+      # fails with ENEEDAUTH on every push. When the secret is absent we leave
+      # `publish` empty so the action only opens/updates the version PR (needs
+      # GITHUB_TOKEN only); once the token is configured, publishing resumes.
+      - id: npm_auth
+        run: |
+          if [ -n "$NPM_TOKEN" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::NPM_TOKEN not set — skipping publish, version PR only."
+          fi
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+
       - name: Create release PR or publish changed packages
         uses: changesets/action@v1
         with:
           version: pnpm run version-packages
-          publish: pnpm run release
+          publish: ${{ steps.npm_auth.outputs.present == 'true' && 'pnpm run release' || '' }}
           title: "chore: version packages"
           commit: "chore: version packages"
         env:
