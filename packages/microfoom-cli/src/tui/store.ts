@@ -16,7 +16,7 @@ interface RunMeta {
 interface TuiSnapshot {
   readonly meta: RunMeta | undefined;
   readonly events: readonly AgentEvent[];
-  readonly status: "running" | "done" | "error";
+  readonly status: "running" | "done" | "error" | "aborted";
   readonly result: string | undefined;
   readonly error: string | undefined;
 }
@@ -30,6 +30,8 @@ interface TuiStore {
   setMeta: (meta: RunMeta) => void;
   /** Mark the run settled; the view stays up. */
   done: (result: string | undefined, error: string | undefined) => void;
+  /** Mark the run user-aborted (distinct from a failure); the view stays up. */
+  aborted: (message: string) => void;
 }
 
 const COALESCE_MS = 30;
@@ -80,6 +82,15 @@ function createStore(): TuiStore {
       status = nextError === undefined ? "done" : "error";
       result = nextResult;
       error = nextError;
+      if (timer !== undefined) {
+        clearTimeout(timer);
+      }
+      timer = undefined;
+      rebuild();
+    },
+    aborted(message: string): void {
+      status = "aborted";
+      error = message;
       if (timer !== undefined) {
         clearTimeout(timer);
       }

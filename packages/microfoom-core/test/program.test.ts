@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import {
   CONTROL_TOOLS,
+  FoomCancelledError,
   foom,
   type OpenSession,
   Program,
@@ -49,6 +50,21 @@ describe("program facade (end to end, fake session)", () => {
       model: "fake",
     });
     expect(out).toBe(9);
+  });
+
+  it("threads RunProgramOptions.signal: an aborted signal cancels the run with FoomCancelledError", async () => {
+    class Picker extends Program<typeof stringInput, number>(stringInput) {
+      async main(): Promise<number> {
+        return await this.agent.value(numberSchema)`Pick a number.`;
+      }
+    }
+    await expect(
+      runProgram(Picker, "x", {
+        harnesses: fakeHarness([callRound(CONTROL_TOOLS.return, { value: 9 })]),
+        model: "fake",
+        signal: AbortSignal.abort(),
+      }),
+    ).rejects.toThrow(FoomCancelledError);
   });
 
   it("runs a do turn: acts via tools and returns nothing, terminating on a no-arg foom_return", async () => {

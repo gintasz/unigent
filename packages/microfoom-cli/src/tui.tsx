@@ -107,7 +107,12 @@ async function runIntoStore(
     const result: unknown = await runProgram(ProgramClass as never, input, runOptions);
     store.done(typeof result === "string" ? result : JSON.stringify(result), undefined);
   } catch (error) {
-    store.done(undefined, errMessage(error));
+    // A user abort surfaces as a rejection too; mark it distinctly (not an error).
+    if (runOptions.signal?.aborted === true) {
+      store.aborted(errMessage(error));
+    } else {
+      store.done(undefined, errMessage(error));
+    }
   }
 }
 
@@ -183,6 +188,9 @@ async function main(): Promise<void> {
     renderer.destroy();
     process.exit(RERUN_EXIT_CODE);
   };
+  // Ctrl+R aborts the in-flight run via this signal (threaded into runProgram).
+  const controller = new AbortController();
+  const abort = (): void => controller.abort();
   createRoot(renderer).render(
     <App
       store={store}
@@ -190,6 +198,7 @@ async function main(): Promise<void> {
       showSystem={values["system-prompt"]}
       showNotices={values["full-user-msg"]}
       onRerun={rerun}
+      onAbort={abort}
     />,
   );
 
@@ -215,6 +224,7 @@ async function main(): Promise<void> {
       harnesses: { [harnessName]: openSession },
       model,
       sourceFile,
+      signal: controller.signal,
       onEvent: (event: AgentEvent) => store.push(event),
       ...(Object.keys(defaults).length > 0 ? { defaults } : {}),
     },

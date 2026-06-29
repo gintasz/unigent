@@ -282,6 +282,9 @@ interface Runtime {
   depth: number;
   methodConfig: AgentConfig | undefined;
   readonly spanALS: AsyncLocalStorage<string | undefined>;
+  /** Program-level abort signal (RunProgramOptions.signal), combined into every
+   *  turn's signal so an external abort cancels the whole run. */
+  readonly signal?: AbortSignal;
 }
 
 function emitAll(runtime: Runtime, event: AgentEvent): void {
@@ -674,10 +677,14 @@ async function driveTurn(
   deps: DriveDeps,
   mode: TurnMode,
   prompt: string,
-  signal: AbortSignal,
+  turnSignal: AbortSignal,
   onStreamChunk?: (chunk: string) => void,
 ): Promise<TurnOutcome> {
   const { runtime, options, source, parentSpan, frozen } = deps;
+  // Combine the per-turn signal (e.g. maxTurnDuration timeout) with the program-level
+  // abort signal so an external `.abort()` cancels the in-flight turn and all that follow.
+  const signal =
+    runtime.signal === undefined ? turnSignal : AbortSignal.any([turnSignal, runtime.signal]);
   const prepared = prepare(runtime, options, frozen);
   const span = runtime.nextSpan();
   const traced = runtime.listeners.size > 0;
@@ -689,6 +696,11 @@ async function driveTurn(
   const turnPrompt = buildTurnPrompt(mode, prompt);
   const startedAt = Date.now();
   try {
+    // Don't start a turn on an already-aborted run — covers harnesses that don't
+    // honour the signal mid-stream, so an abort still lands at the next turn boundary.
+    if (signal.aborted) {
+      throw new FoomCancelledError("the agent run was aborted");
+    }
     const session = await source.get();
     // The exact system prompt the model saw this turn, sourced from the session
     // (so a harness that prepends its own base prompt shows the composed whole).
@@ -726,6 +738,9 @@ async function driveTurn(
       ),
     );
   } catch (error) {
+    if (error instanceof FoomCancelledError) {
+      throw error;
+    }
     if (signal.aborted) {
       throw new FoomCancelledError("the agent run was aborted", { cause: error });
     }
@@ -1147,6 +1162,7 @@ async function runProgram<P extends FoomProgram<never, unknown>>(
     exposed: exposedMethods(instance),
     derivations: new Map(),
     ...(options.sourceFile === undefined ? {} : { sourceFile: options.sourceFile }),
+    ...(options.signal === undefined ? {} : { signal: options.signal }),
     className: options.className ?? instance.constructor.name,
     usage: emptyUsage,
     listeners: new Set(),

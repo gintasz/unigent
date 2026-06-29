@@ -19,6 +19,7 @@ import {
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { fmtCost, fmtDuration, fmtTokens } from "../format.js";
 import { copyToClipboard } from "./clipboard.js";
+import { runControlAction } from "./keys.js";
 import { MacScrollAccel } from "./scroll.js";
 import type { TuiStore } from "./store.js";
 import type { Palette, ThemeMode } from "./theme.js";
@@ -42,8 +43,10 @@ interface AppProps {
   /** Show the full user message — incl. the instructions microfoom appends to user
    *  prompts — rather than just the authored prompt (toggle with `m`). */
   readonly showNotices: boolean;
-  /** Re-run the program (bound to `r`). */
+  /** Re-run the program (bound to `r`, only when the run has settled). */
   readonly onRerun: () => void;
+  /** Abort the in-flight run (bound to Ctrl+R, only while running). */
+  readonly onAbort: () => void;
 }
 
 // Strip the delimited runtime notes microfoom appends to a user prompt — runtime
@@ -91,23 +94,14 @@ interface KeyActions {
   readonly setShowSystem: (update: (v: boolean) => boolean) => void;
   readonly setShowNotices: (update: (v: boolean) => boolean) => void;
   readonly onRerun: () => void;
+  readonly onAbort: () => void;
+  /** Whether the run is currently in flight — gates abort (running) vs rerun (settled). */
+  readonly running: boolean;
 }
 
-/** Key bindings: quit, clear selection, re-run, toggle system/notices, navigate. */
-function handleKey(key: { readonly name?: string; readonly ctrl?: boolean }, a: KeyActions): void {
-  const { name } = key;
-  if (name === "q" || (key.ctrl === true && name === "c")) {
-    a.renderer.destroy();
-    process.exit(0);
-  } else if (name === "a" || name === "escape") {
-    a.setSelected(undefined);
-  } else if (name === "r") {
-    a.onRerun();
-  } else if (name === "s") {
-    a.setShowSystem((v) => !v);
-  } else if (name === "m") {
-    a.setShowNotices((v) => !v);
-  } else if (name === "up" || name === "k" || name === "down" || name === "j") {
+/** Move the selection on an arrow / vim-nav key; ignores anything else. */
+function handleNavKey(name: string | undefined, a: KeyActions): void {
+  if (name === "up" || name === "k" || name === "down" || name === "j") {
     const span = selectRelative(a.rows, a.selected, name === "up" || name === "k" ? -1 : 1);
     if (span !== undefined) {
       a.setSelected(span);
@@ -115,10 +109,36 @@ function handleKey(key: { readonly name?: string; readonly ctrl?: boolean }, a: 
   }
 }
 
+/** Key bindings: quit, abort (Ctrl+R, running), rerun (`r`, settled), clear
+ *  selection, toggle system/notices, navigate. */
+function handleKey(key: { readonly name?: string; readonly ctrl?: boolean }, a: KeyActions): void {
+  const { name } = key;
+  const control = runControlAction(key, a.running);
+  if (name === "q" || (key.ctrl === true && name === "c")) {
+    a.renderer.destroy();
+    process.exit(0);
+  } else if (control === "abort") {
+    a.onAbort();
+  } else if (control === "rerun") {
+    a.onRerun();
+  } else if (name === "a" || name === "escape") {
+    a.setSelected(undefined);
+  } else if (name === "s") {
+    a.setShowSystem((v) => !v);
+  } else if (name === "m") {
+    a.setShowNotices((v) => !v);
+  } else {
+    handleNavKey(name, a);
+  }
+}
+
 /** The header status dot color + label for the run's current status. */
 function statusStyle(status: string, palette: Palette): { color: string; text: string } {
   if (status === "error") {
     return { color: palette.error, text: "● error" };
+  }
+  if (status === "aborted") {
+    return { color: palette.scope, text: "● aborted" };
   }
   if (status === "done") {
     return { color: palette.ok, text: "● done" };
@@ -393,7 +413,7 @@ interface TranscriptPaneProps {
   readonly palette: Palette;
   readonly shown: readonly TranscriptEntry[];
   readonly error: string | undefined;
-  readonly status: "running" | "done" | "error";
+  readonly status: "running" | "done" | "error" | "aborted";
   readonly selected: string | undefined;
   readonly focused: boolean;
   readonly transcriptAccel: MacScrollAccel;
@@ -443,10 +463,11 @@ interface FooterProps {
   readonly showNotices: boolean;
   readonly copied: number | undefined;
   readonly tree: ReturnType<typeof buildRunTree>;
+  readonly running: boolean;
 }
 
 function AppFooter(props: FooterProps): React.ReactNode {
-  const { palette, showSystem, showNotices, copied, tree } = props;
+  const { palette, showSystem, showNotices, copied, tree, running } = props;
   return (
     <box
       height={1}
@@ -456,7 +477,8 @@ function AppFooter(props: FooterProps): React.ReactNode {
       paddingRight={1}
     >
       <text fg={palette.dim}>
-        r rerun · <span fg={showSystem ? palette.accent : palette.dim}>s sys prompt</span> ·{" "}
+        {running ? <span fg={palette.scope}>^R abort</span> : "r rerun"} ·{" "}
+        <span fg={showSystem ? palette.accent : palette.dim}>s sys prompt</span> ·{" "}
         <span fg={showNotices ? palette.accent : palette.dim}>m full user msg</span> · drag copy ·
         ↑↓ select · a all · q quit
       </text>
@@ -473,12 +495,14 @@ function App({
   showSystem: showSystemInit,
   showNotices: showNoticesInit,
   onRerun,
+  onAbort,
 }: AppProps): React.ReactNode {
   const renderer = useRenderer();
   const [selected, setSelected] = useState<string | undefined>(undefined);
   const [showSystem, setShowSystem] = useState(showSystemInit);
   const [showNotices, setShowNotices] = useState(showNoticesInit);
   const v = useRunView({ store, renderer, initialMode, selected, showSystem });
+  const running = v.snapshot.status === "running";
 
   useKeyboard((key) =>
     handleKey(key, {
@@ -489,6 +513,8 @@ function App({
       setShowSystem,
       setShowNotices,
       onRerun,
+      onAbort,
+      running,
     }),
   );
 
@@ -529,6 +555,7 @@ function App({
         showNotices={showNotices}
         copied={v.copied}
         tree={v.tree}
+        running={running}
       />
     </box>
   );
@@ -548,7 +575,10 @@ function findNode(node: RunNode, span: string): RunNode | undefined {
   return;
 }
 
-function emptyMessage(status: "running" | "done" | "error", selected: string | undefined): string {
+function emptyMessage(
+  status: "running" | "done" | "error" | "aborted",
+  selected: string | undefined,
+): string {
   if (selected !== undefined) {
     return `no transcript for ${selected} (e.g. a pure method or scope)`;
   }
