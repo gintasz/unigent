@@ -22,6 +22,12 @@ export interface ClaudeSpec {
   readonly foomTools: readonly string[];
   /** The harness's OWN (built-in) tools to allow: undefined = all, [] = none. */
   readonly allowedHarnessTools?: readonly string[] | undefined;
+  /** Settings to inject via `--settings` for this session (e.g. `enabledPlugins`,
+   *  `skillOverrides`). Composed on top of the hermetic `--setting-sources ""` base.
+   *  Undefined when the session constrains neither skills nor plugins. */
+  readonly settings?: Record<string, unknown> | undefined;
+  /** Disable ALL of Claude's skills for the session (`--disable-slash-commands`). */
+  readonly disableSlashCommands?: boolean | undefined;
   /** Reasoning effort, when the request asked for one. */
   readonly effort?: string | undefined;
   /** Replace Claude's system prompt (default) vs. append to it. */
@@ -87,6 +93,16 @@ export function buildArgs(spec: ClaudeSpec): string[] {
 
   if (spec.effort !== undefined && EFFORT_LEVELS.has(spec.effort)) {
     args.push("--effort", spec.effort);
+  }
+
+  // Skills/plugins scoping. `--disable-slash-commands` turns ALL skills off; the
+  // `--settings` JSON (enabledPlugins / skillOverrides) layers on top of the
+  // hermetic `--setting-sources ""` base.
+  if (spec.disableSlashCommands === true) {
+    args.push("--disable-slash-commands");
+  }
+  if (spec.settings !== undefined) {
+    args.push("--settings", JSON.stringify(spec.settings));
   }
 
   if (spec.resumeSessionId !== undefined) {

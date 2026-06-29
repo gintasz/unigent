@@ -6,6 +6,9 @@
 
 import { OpenSession } from '@microfoom/core';
 
+// @public
+export function buildSessionControls(skills: readonly string[] | undefined, plugins: readonly string[] | undefined): ClaudeSessionControls;
+
 // @public (undocumented)
 export const CLAUDECLI_HARNESS_VERSION = "0.1.0";
 
@@ -30,9 +33,16 @@ export interface ClaudeProcess {
 export type ClaudeProcessFactory = (spec: ClaudeSpec) => ClaudeProcess;
 
 // @public
+export interface ClaudeSessionControls {
+    readonly disableSlashCommands: boolean;
+    readonly settings?: Record<string, unknown>;
+}
+
+// @public
 export interface ClaudeSpec {
     readonly allowedHarnessTools?: readonly string[] | undefined;
     readonly appendSystemPrompt: boolean;
+    readonly disableSlashCommands?: boolean | undefined;
     readonly effort?: string | undefined;
     readonly extraArgs?: readonly string[] | undefined;
     readonly foomTools: readonly string[];
@@ -46,6 +56,7 @@ export interface ClaudeSpec {
     readonly resumeSessionId?: string | undefined;
     readonly serverName: string;
     readonly sessionId?: string | undefined;
+    readonly settings?: Record<string, unknown> | undefined;
     // (undocumented)
     readonly signal?: AbortSignal | undefined;
     // (undocumented)

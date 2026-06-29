@@ -14,6 +14,7 @@
 
 import { randomUUID } from "node:crypto";
 import {
+  FoomtimeConfigError,
   FoomtimeHarnessRejectedError,
   FoomtimeHarnessUnavailableError,
   type HarnessSession,
@@ -141,6 +142,50 @@ function resolveTurnResult(reader: TurnReader, proc: ClaudeProcess): SessionTurn
   return { assistantText: reader.assistantText(), usage: reader.usage() };
 }
 
+/** Claude Code session scoping derived from a microfoom session's skills/plugins. */
+export interface ClaudeSessionControls {
+  /** Settings to inject via `--settings` (e.g. `enabledPlugins`); absent = none. */
+  readonly settings?: Record<string, unknown>;
+  /** Disable ALL skills (`--disable-slash-commands`). */
+  readonly disableSlashCommands: boolean;
+}
+
+/**
+ * Map a session's `skills`/`plugins` (opaque, tri-state — see core's `AgentConfig`)
+ * onto Claude Code session controls. The session runs hermetic
+ * (`--setting-sources ""`), so nothing is enabled by ambient config; these only ever
+ * turn chosen plugins ON and skills OFF.
+ *
+ *  - `plugins`: `undefined`/`[]` → no plugins (the hermetic default); a list →
+ *    `enabledPlugins` enabling exactly those (ids are Claude's `name@marketplace`).
+ *  - `skills`: `undefined` → Claude's default skills; `[]` → all skills off. A
+ *    by-name allow-list throws — Claude skills default to "on", so allowing only N
+ *    would require enumerating every skill to turn the rest off (unsupported here).
+ */
+export function buildSessionControls(
+  skills: readonly string[] | undefined,
+  plugins: readonly string[] | undefined,
+): ClaudeSessionControls {
+  const settings: Record<string, unknown> = {};
+  if (plugins !== undefined && plugins.length > 0) {
+    settings.enabledPlugins = Object.fromEntries(plugins.map((id) => [id, true]));
+  }
+  let disableSlashCommands = false;
+  if (skills !== undefined) {
+    if (skills.length === 0) {
+      disableSlashCommands = true;
+    } else {
+      throw new FoomtimeConfigError(
+        "the claudecli harness cannot allow-list skills by name (Claude Code skills default to on); use [] to disable all skills, or leave skills unset",
+      );
+    }
+  }
+  return {
+    ...(Object.keys(settings).length > 0 ? { settings } : {}),
+    disableSlashCommands,
+  };
+}
+
 /**
  * Build an OpenSession backed by the `claude` CLI. Pass the result to runProgram's
  * `harnesses`. Models resolve through Claude Code itself (`--model`); auth comes
@@ -151,10 +196,12 @@ export function createClaudeCliOpenSession(options: ClaudeCliSessionOptions = {}
   const serverName = options.serverName ?? DEFAULT_SERVER_NAME;
   const appendSystemPrompt = options.appendSystemPrompt ?? false;
 
-  return ({ model: modelId }): HarnessSession => {
+  return ({ model: modelId, skills, plugins }): HarnessSession => {
     if (modelId.trim() === "") {
       throw new FoomtimeHarnessRejectedError("no model specified for the claudecli harness");
     }
+    // Resolve skills/plugins scoping once per session — throws on unsupported config.
+    const controls = buildSessionControls(skills, plugins);
 
     // One Claude session id per microfoom session: reused across runTurn calls via
     // `--resume`, so a session() is one continued conversation. A fork() seeds a
@@ -183,6 +230,8 @@ export function createClaudeCliOpenSession(options: ClaudeCliSessionOptions = {}
           resumeSessionId,
           fork,
           extraArgs: options.extraArgs,
+          ...(controls.settings !== undefined ? { settings: controls.settings } : {}),
+          disableSlashCommands: controls.disableSlashCommands,
           signal: request.signal,
         };
 
