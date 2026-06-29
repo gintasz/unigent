@@ -231,7 +231,7 @@ function noticeBlock(body: string): string {
 // Appended to a value turn's prompt (only). A delimited meta-notice nudging the
 // model to actually terminate the turn with foom_return.
 const VALUE_TURN_NOTICE = noticeBlock(
-  "You must end this turn by calling the foom_return tool with the result; If you cannot complete the task as the user instruction expects, or the instructions are defective or contradictory, call foom_throw instead.",
+  "The user instruction expected you to end this turn with a foom_return tool call passing the result; If you cannot complete the task as the user instruction expects, or the instructions are defective or contradictory, call foom_throw instead as a last resort option.",
 );
 
 // Appended to a `do` turn's prompt: terminate with a no-arg foom_return once the
