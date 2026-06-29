@@ -169,7 +169,7 @@ export function buildSessionControls(
 ): ClaudeSessionControls {
   const settings: Record<string, unknown> = {};
   if (plugins !== undefined && plugins.length > 0) {
-    settings.enabledPlugins = Object.fromEntries(plugins.map((id) => [id, true]));
+    settings["enabledPlugins"] = Object.fromEntries(plugins.map((id) => [id, true]));
   }
   let disableSlashCommands = false;
   if (skills !== undefined) {
@@ -197,7 +197,7 @@ export function createClaudeCliOpenSession(options: ClaudeCliSessionOptions = {}
   const serverName = options.serverName ?? DEFAULT_SERVER_NAME;
   const appendSystemPrompt = options.appendSystemPrompt ?? false;
 
-  return ({ model: modelId, skills, plugins }): HarnessSession => {
+  return ({ model: modelId, skills, plugins }: HarnessSessionOptions): HarnessSession => {
     if (modelId.trim() === "") {
       throw new FoomtimeHarnessRejectedError("no model specified for the claudecli harness");
     }

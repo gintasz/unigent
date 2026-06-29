@@ -57,7 +57,7 @@ export type ClaudeProcessFactory = (spec: ClaudeSpec) => ClaudeProcess;
 const EFFORT_LEVELS: ReadonlySet<string> = new Set(["low", "medium", "high", "xhigh", "max"]);
 
 /** Build the full `claude` argv (the binary itself excluded) for one turn. */
-function buildArgs(spec: ClaudeSpec): string[] {
+export function buildArgs(spec: ClaudeSpec): string[] {
   const mcpConfig = JSON.stringify({
     mcpServers: { [spec.serverName]: { type: "http", url: spec.mcpUrl } },
   });

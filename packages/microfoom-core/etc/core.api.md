@@ -358,7 +358,7 @@ export function Program<S extends StandardSchemaV1, R = unknown>(input: S): abst
 // @public
 export type RepairChannel = "args" | "return" | "dispatch";
 
-// @public (undocumented)
+// @public
 export function runProgram<P extends FoomtimeProgram<never, unknown>>(ProgramClass: abstract new () => P, rawInput: unknown, options: RunProgramOptions): Promise<Awaited<ReturnType<P["main"]>>>;
 
 // @public
