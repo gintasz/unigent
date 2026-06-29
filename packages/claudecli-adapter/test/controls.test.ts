@@ -119,4 +119,24 @@ describe("config reaches the claude subprocess (offline)", () => {
       }),
     ).rejects.toBeInstanceOf(FoomtimeConfigError);
   });
+
+  it("omitHarnessBasePrompt=false keeps Claude's base (appendSystemPrompt true)", async () => {
+    const { openSession, seen } = capturingHarness();
+    await runProgram(Echo, "x", {
+      harnesses: { claudecli: openSession },
+      model: "sonnet",
+      defaults: { tools: [], omitHarnessBasePrompt: false },
+    });
+    expect(seen()?.appendSystemPrompt).toBe(true);
+  });
+
+  it("omitHarnessBasePrompt=true drops Claude's base (appendSystemPrompt false)", async () => {
+    const { openSession, seen } = capturingHarness();
+    await runProgram(Echo, "x", {
+      harnesses: { claudecli: openSession },
+      model: "sonnet",
+      defaults: { tools: [], omitHarnessBasePrompt: true },
+    });
+    expect(seen()?.appendSystemPrompt).toBe(false);
+  });
 });

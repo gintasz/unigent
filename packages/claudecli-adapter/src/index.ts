@@ -225,7 +225,10 @@ export function createClaudeCliOpenSession(options: ClaudeCliSessionOptions = {}
           foomTools: names,
           allowedHarnessTools: request.allowedTools,
           effort: request.thinking,
-          appendSystemPrompt,
+          // Per-turn omit (request.omitBasePrompt) wins; else the construction default.
+          // omit → don't append Claude's base; keep → append it.
+          appendSystemPrompt:
+            request.omitBasePrompt === undefined ? appendSystemPrompt : !request.omitBasePrompt,
           sessionId: newId,
           resumeSessionId,
           fork,

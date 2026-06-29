@@ -90,6 +90,45 @@ describe("harness base prompt (omitHarnessBasePrompt)", () => {
   });
 });
 
+describe("omitHarnessBasePrompt as scoped config (overrides the construction default)", () => {
+  /** Run Greeter with a run-level `omitHarnessBasePrompt` config default. */
+  async function runOmit(
+    openSession: ReturnType<typeof createPiOpenSession>,
+    model: string,
+    omitHarnessBasePrompt: boolean,
+  ): Promise<void> {
+    await runProgram(Greeter, "x", {
+      harnesses: { pi: openSession },
+      model,
+      defaults: { omitHarnessBasePrompt },
+    });
+  }
+
+  it("config omit=true drops the base even when construction default keeps it", async () => {
+    const { openSession, model, sent } = setup(false);
+    await runOmit(openSession, model, true);
+    expect(sent()).not.toContain(BASE);
+    expect(sent()).toContain("microfoom runtime");
+  });
+
+  it("config omit=false keeps the base even when construction default drops it", async () => {
+    const { openSession, model, sent } = setup(true);
+    await runOmit(openSession, model, false);
+    expect(sent()).toContain(BASE);
+  });
+
+  it("a per-call .with({ omitHarnessBasePrompt }) drops the base for that turn", async () => {
+    const { openSession, model, sent } = setup(false);
+    class Scoped extends Program<typeof stringSchema, string>(stringSchema) {
+      async main(): Promise<string> {
+        return await this.agent.with({ omitHarnessBasePrompt: true }).prose`go`;
+      }
+    }
+    await runProgram(Scoped, "x", { harnesses: { pi: openSession }, model });
+    expect(sent()).not.toContain(BASE);
+  });
+});
+
 describe("allowedTools (per-turn harness tool allowlist)", () => {
   it("undefined → all harness tools + FOOM tools", async () => {
     const { openSession, model, tools } = setup(false);

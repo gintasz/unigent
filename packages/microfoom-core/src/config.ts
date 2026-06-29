@@ -47,6 +47,13 @@ export interface AgentConfig {
   /** The plugins the harness loads this scope (pi calls these "extensions"; opaque
    *  names). Same tri-state + session timing as {@link AgentConfig.skills}. */
   plugins?: readonly string[];
+  /** Drop the harness's OWN base system prompt for this scope's turns — send the
+   *  model only microfoom's prompt (the runtime block + this config's
+   *  {@link AgentConfig.systemPrompt}), not the adapter's persona/project context.
+   *  Overrides the harness adapter's construction default; absent = inherit it.
+   *  Note: a stateful {@link AgentSession} re-applies this per turn on some harnesses
+   *  but not others — see the mid-session-identity caveat. */
+  omitHarnessBasePrompt?: boolean;
   /** Reasoning effort for the turn. One of the known {@link ThinkingLevel}s, or a
    *  provider-specific raw string passed through untouched. Absent = inherit (and,
    *  at the widest scope, whatever the harness/model defaults to). */
@@ -160,6 +167,8 @@ function compact(config: LooseConfig): AgentConfig {
   if (config.tools !== undefined) out.tools = config.tools;
   if (config.skills !== undefined) out.skills = config.skills;
   if (config.plugins !== undefined) out.plugins = config.plugins;
+  if (config.omitHarnessBasePrompt !== undefined)
+    out.omitHarnessBasePrompt = config.omitHarnessBasePrompt;
   if (config.thinking !== undefined) out.thinking = config.thinking;
   if (config.retries !== undefined) out.retries = config.retries;
   if (config.repairAttempts !== undefined) out.repairAttempts = config.repairAttempts;
@@ -182,6 +191,7 @@ export function mergeConfig(wider: AgentConfig, narrower: AgentConfig): AgentCon
     tools: override(wider.tools, narrower.tools),
     skills: override(wider.skills, narrower.skills),
     plugins: override(wider.plugins, narrower.plugins),
+    omitHarnessBasePrompt: override(wider.omitHarnessBasePrompt, narrower.omitHarnessBasePrompt),
     thinking: override(wider.thinking, narrower.thinking),
     retries: override(wider.retries, narrower.retries),
     repairAttempts: override(wider.repairAttempts, narrower.repairAttempts),

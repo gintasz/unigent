@@ -301,6 +301,9 @@ interface PiRuntime {
    *  FOOM tools, so the harness persona's claimed capabilities are real. undefined
    *  in bare mode (omitHarnessBasePrompt) — then only the FOOM tools are offered. */
   readonly harnessTools?: readonly AgentTool[] | undefined;
+  /** Default for dropping the base prompt, from `omitHarnessBasePrompt` — a turn's
+   *  `request.omitBasePrompt` overrides it per turn. */
+  readonly omitBaseDefault: boolean;
 }
 
 /** Append the program's system prompt to the harness base (AGENTS.md-style). */
@@ -392,11 +395,13 @@ function runtimeKey(
 export function createPiOpenSession(options: PiSessionOptions = {}): OpenSession {
   const logFile = options.logFile ?? process.env.MICROFOOM_LOG;
 
-  // `omitHarnessBasePrompt` drops pi's base PROMPT only (persona/context). Which
-  // tools are exposed is independent — controlled per-turn by request.allowedTools.
-  // An explicit option override wins over pi's configured values (for tests).
+  // Store pi's REAL base prompt; omission is applied per turn (so a scope can flip it
+  // — see request.omitBasePrompt), defaulting to this construction option. An explicit
+  // basePrompt override wins over pi's configured value (for tests). Which tools are
+  // exposed is independent — controlled per-turn by request.allowedTools.
+  const omitBaseDefault = options.omitHarnessBasePrompt === true;
   const resolveBase = (piBase: string | undefined): string | undefined =>
-    options.omitHarnessBasePrompt === true ? undefined : (options.basePrompt ?? piBase);
+    options.basePrompt ?? piBase;
   const resolveTools = (piTools: readonly AgentTool[] | undefined) => options.tools ?? piTools;
 
   // skills/plugins arrive PER session-open (resolved from the scope's merged config —
@@ -414,6 +419,7 @@ export function createPiOpenSession(options: PiSessionOptions = {}): OpenSession
         streamFn: options.streamFn,
         basePrompt: resolveBase(undefined),
         harnessTools: resolveTools(undefined),
+        omitBaseDefault,
       };
     }
     if (sharedRegistry === undefined) {
@@ -442,6 +448,7 @@ export function createPiOpenSession(options: PiSessionOptions = {}): OpenSession
       registry,
       basePrompt: resolveBase(session.agent.state.systemPrompt),
       harnessTools: resolveTools(session.agent.state.tools),
+      omitBaseDefault,
     };
   };
 
@@ -514,12 +521,21 @@ export function createPiOpenSession(options: PiSessionOptions = {}): OpenSession
       return {
         // The model receives pi's base prompt with the program prompt appended.
         systemPrompt(programPrompt: string): string {
-          return composeSystemPrompt(runtime.basePrompt, programPrompt);
+          return composeSystemPrompt(
+            runtime.omitBaseDefault ? undefined : runtime.basePrompt,
+            programPrompt,
+          );
         },
         async runTurn(request: SessionTurnRequest): Promise<SessionTurnResult> {
           const thinkingLevel = resolveThinking(request.thinking);
           const tools = selectTurnTools(runtime, request);
-          const systemPrompt = composeSystemPrompt(runtime.basePrompt, request.systemPrompt);
+          // Drop pi's base prompt for this turn when the scope asked to (or the
+          // construction default does); core threads it as request.omitBasePrompt.
+          const omitBase = request.omitBasePrompt ?? runtime.omitBaseDefault;
+          const systemPrompt = composeSystemPrompt(
+            omitBase ? undefined : runtime.basePrompt,
+            request.systemPrompt,
+          );
           const activeAgent = ensureAgent(systemPrompt, thinkingLevel, tools);
 
           const unsubscribe = subscribeStream(activeAgent, request.onEvent);

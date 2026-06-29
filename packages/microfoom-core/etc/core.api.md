@@ -23,6 +23,7 @@ export interface AgentConfig {
     maxOutputTokens?: number;
     maxTurnDuration?: Duration;
     model?: string;
+    omitHarnessBasePrompt?: boolean;
     plugins?: readonly string[];
     repairAttempts?: number;
     retries?: number;
@@ -380,6 +381,7 @@ export interface SessionTurnRequest {
     readonly allowedTools?: readonly string[];
     // (undocumented)
     readonly maxOutputTokens?: number;
+    readonly omitBasePrompt?: boolean;
     // (undocumented)
     readonly onEvent?: (event: StreamEvent) => void;
     // (undocumented)

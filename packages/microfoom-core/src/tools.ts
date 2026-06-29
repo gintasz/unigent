@@ -342,6 +342,7 @@ export interface RunTurnParams {
   readonly fold: (delta: UsageAccount) => UsageAccount;
   readonly thinking?: string;
   readonly allowedTools?: readonly string[];
+  readonly omitBasePrompt?: boolean;
   readonly onToken?: (token: LLMToken) => void;
   readonly onStreamChunk?: (chunk: string) => void;
   readonly signal?: AbortSignal;
@@ -365,6 +366,7 @@ function buildTurnRequest(
   };
   if (params.thinking !== undefined) request.thinking = params.thinking;
   if (params.allowedTools !== undefined) request.allowedTools = params.allowedTools;
+  if (params.omitBasePrompt !== undefined) request.omitBasePrompt = params.omitBasePrompt;
   if (params.caps.maxOutputTokens !== undefined) {
     request.maxOutputTokens = params.caps.maxOutputTokens;
   }

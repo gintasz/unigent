@@ -152,6 +152,7 @@ Set config with `@foom.config({ ... })` on a class or method, with `.with({ ... 
 | `retries` | Retries on a *retryable* harness error. |
 | `repairAttempts` | Validation failures tolerated before giving up (default `3`). |
 | `systemPrompt` | This scope's contribution: `{ append }` accumulates, `{ replace }` resets the base. |
+| `omitHarnessBasePrompt` | Drop the harness's own base prompt (its coding persona / project context), sending the model only microfoom's prompt + `systemPrompt`. Overrides the adapter's default. |
 | `maxBudgetUsd` | Cost ceiling; exceeding aborts. Tighten-only. |
 | `maxOutputTokens` | Output-token ceiling. Tighten-only. |
 | `maxCallDepth` | Max `foom_call` re-entry depth. Tighten-only. |

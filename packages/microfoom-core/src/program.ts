@@ -405,6 +405,7 @@ interface Prepared {
   readonly caps: ResolvedCaps;
   readonly thinking?: string;
   readonly allowedTools?: readonly string[];
+  readonly omitBasePrompt?: boolean;
 }
 
 function prepare(runtime: Runtime, options: AgentOptions): Prepared {
@@ -445,6 +446,9 @@ function prepare(runtime: Runtime, options: AgentOptions): Prepared {
     caps: resolveCaps(merged),
     ...(merged.thinking !== undefined ? { thinking: merged.thinking } : {}),
     ...(merged.tools !== undefined ? { allowedTools: merged.tools } : {}),
+    ...(merged.omitHarnessBasePrompt !== undefined
+      ? { omitBasePrompt: merged.omitHarnessBasePrompt }
+      : {}),
   };
   return prepared;
 }
@@ -544,6 +548,7 @@ function buildRunTurnParams(args: {
     span,
     ...(prepared.thinking !== undefined ? { thinking: prepared.thinking } : {}),
     ...(prepared.allowedTools !== undefined ? { allowedTools: prepared.allowedTools } : {}),
+    ...(prepared.omitBasePrompt !== undefined ? { omitBasePrompt: prepared.omitBasePrompt } : {}),
     ...(options.onToken !== undefined ? { onToken: options.onToken } : {}),
     ...(onStreamChunk !== undefined ? { onStreamChunk } : {}),
     signal: args.signal,

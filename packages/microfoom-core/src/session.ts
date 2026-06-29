@@ -78,6 +78,9 @@ export interface SessionTurnRequest {
   /** Allowlist of the harness's OWN tools to expose this turn (opaque names).
    *  `undefined` = all; `[]` = none. The `tools` above (FOOM) are always exposed. */
   readonly allowedTools?: readonly string[];
+  /** Drop the harness's own base system prompt for this turn (send only `systemPrompt`).
+   *  Absent = the harness adapter's construction default. */
+  readonly omitBasePrompt?: boolean;
   readonly thinking?: ThinkingLevel;
   readonly maxOutputTokens?: number;
   readonly onEvent?: (event: StreamEvent) => void;
