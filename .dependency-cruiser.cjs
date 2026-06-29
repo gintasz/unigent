@@ -16,7 +16,17 @@ module.exports = {
       severity: "error",
       comment: "The generic core must never import an adapter or a frontend (A3/F6).",
       from: { path: "^packages/microfoom-core/src" },
-      to: { path: "^packages/(pi-adapter|microfoom-cli)/" },
+      to: {
+        path: "^packages/(adapter-base|pi-adapter|claudecli-adapter|codexcli-adapter|microfoom-cli)/",
+      },
+    },
+    {
+      name: "adapter-base-stays-generic",
+      severity: "error",
+      comment:
+        "The shared adapter base must not import a concrete adapter or the cli — only core (A3).",
+      from: { path: "^packages/adapter-base/src" },
+      to: { path: "^packages/(pi-adapter|claudecli-adapter|codexcli-adapter|microfoom-cli)/" },
     },
     {
       name: "no-adapter-importing-cli",

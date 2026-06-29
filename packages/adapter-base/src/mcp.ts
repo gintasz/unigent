@@ -1,21 +1,21 @@
-// An in-process Streamable-HTTP MCP server exposing this turn's FOOM tools. It
-// runs INSIDE the program's process — so a tool's `execute` is the real core
-// closure over the live program state — and Claude Code (the subprocess) connects
-// back over localhost to call them. A stdio MCP server can't do this: it would be
-// a separate process with no access to the running program.
+// An in-process Streamable-HTTP MCP server exposing a turn's FOOM tools. It runs
+// INSIDE the program's process — so a tool's `execute` is the real core closure
+// over the live program state — and the harness subprocess (Claude Code, Codex, …)
+// connects back over localhost to call them. A stdio MCP server can't do this: it
+// would be a separate process with no access to the running program.
 //
-// Only the minimal JSON-RPC subset Claude Code drives is implemented: initialize,
-// tools/list, tools/call (verified against the real CLI). Tools are registered
-// under their CANONICAL basenames (Claude Code adds the `mcp__<server>__` prefix
-// itself); only the description text is renamed so its references match what the
-// model sees.
+// Only the minimal JSON-RPC subset the CLI MCP clients drive is implemented:
+// initialize, tools/list, tools/call (verified against the real CLIs; notifications
+// get no reply). Tools are registered under their CANONICAL basenames; the model-
+// facing tool DESCRIPTION is produced by the injected `describe` hook, so a harness
+// that namespaces tool names (Claude Code → `mcp__<server>__<tool>`) can rewrite the
+// description to match while a harness that shows bare names (Codex) keeps it as-is.
 
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 import type { NeutralToolDef } from "@microfoom/core";
-import { applyRename } from "./rename.js";
 
-/** The protocol version we echo back; Claude Code negotiates from its own. */
+/** The protocol version echoed back; the client negotiates from its own. */
 const FALLBACK_PROTOCOL_VERSION = "2025-06-18";
 
 /** HTTP 200 OK — a JSON-RPC response body follows. */
@@ -23,9 +23,9 @@ const HTTP_OK = 200;
 /** HTTP 202 Accepted — acknowledged, no JSON-RPC reply (notification / non-POST). */
 const HTTP_ACCEPTED = 202;
 
-/** Fold a tool's optional usage blurb + guideline bullets into the one
- *  model-native field an MCP tool has — its description. (Claude Code MCP tools
- *  carry no separate promptSnippet slot.) */
+/** Fold a tool's optional usage blurb + guideline bullets into the one model-native
+ *  field an MCP tool has — its description. (MCP tools carry no separate
+ *  promptSnippet slot.) This is the default `describe` for {@link createMcpHandler}. */
 function toolDescription(tool: NeutralToolDef): string {
   const parts = [tool.description];
   if (tool.promptSnippet !== undefined) {
@@ -37,6 +37,9 @@ function toolDescription(tool: NeutralToolDef): string {
   return parts.join("\n\n");
 }
 
+/** Renders the model-facing description of a tool for the `tools/list` listing. */
+type DescribeTool = (tool: NeutralToolDef) => string;
+
 interface JsonRpcRequest {
   readonly jsonrpc: "2.0";
   readonly id?: string | number | null;
@@ -46,7 +49,7 @@ interface JsonRpcRequest {
 
 /** A live MCP endpoint for one turn. */
 interface McpServerHandle {
-  /** The URL Claude Code is pointed at via `--mcp-config`. */
+  /** The URL the harness subprocess is pointed at. */
   readonly url: string;
   /** True once a tool signalled a terminal outcome (foom_return / foom_throw). */
   terminated: () => boolean;
@@ -59,17 +62,17 @@ interface McpServerHandle {
 function createMcpHandler(
   tools: readonly NeutralToolDef[],
   serverName: string,
+  describe: DescribeTool = toolDescription,
 ): {
   handle: (request: JsonRpcRequest) => Promise<Record<string, unknown> | null>;
   terminated: () => boolean;
 } {
   const byName = new Map(tools.map((tool) => [tool.name, tool]));
-  const names = tools.map((tool) => tool.name);
   let didTerminate = false;
 
   const listing = tools.map((tool) => ({
     name: tool.name,
-    description: applyRename(toolDescription(tool), names, serverName),
+    description: describe(tool),
     inputSchema: tool.parameters,
   }));
 
@@ -148,8 +151,9 @@ function readBody(req: IncomingMessage): Promise<string> {
 async function startMcpServer(
   tools: readonly NeutralToolDef[],
   serverName: string,
+  describe: DescribeTool = toolDescription,
 ): Promise<McpServerHandle> {
-  const { handle, terminated } = createMcpHandler(tools, serverName);
+  const { handle, terminated } = createMcpHandler(tools, serverName, describe);
 
   const server: Server = createServer((req: IncomingMessage, res: ServerResponse) => {
     (async () => {
@@ -202,4 +206,5 @@ async function startMcpServer(
   };
 }
 
-export { createMcpHandler, startMcpServer };
+export type { DescribeTool, McpServerHandle };
+export { createMcpHandler, startMcpServer, toolDescription };

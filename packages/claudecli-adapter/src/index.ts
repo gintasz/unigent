@@ -22,8 +22,13 @@
 
 import { randomUUID } from "node:crypto";
 import {
+  drainTurnStream,
+  resolveTurnResult,
+  startMcpServer,
+  toolDescription,
+} from "@microfoom/adapter-base";
+import {
   FoomHarnessRejectedError,
-  FoomHarnessUnavailableError,
   type HarnessSession,
   type HarnessSessionOptions,
   type NeutralToolDef,
@@ -32,15 +37,9 @@ import {
   type SessionTurnResult,
 } from "@microfoom/core";
 import { buildSessionControls } from "./controls.js";
-import { startMcpServer } from "./mcp.js";
-import {
-  type ClaudeProcess,
-  type ClaudeProcessFactory,
-  type ClaudeSpec,
-  spawnClaude,
-} from "./process.js";
+import { type ClaudeProcessFactory, type ClaudeSpec, spawnClaude } from "./process.js";
 import { applyRename } from "./rename.js";
-import { createTurnReader, type TurnReader } from "./stream.js";
+import { createTurnReader } from "./stream.js";
 
 const CLAUDECLI_VERSION = "0.1.0";
 
@@ -114,41 +113,6 @@ function resolveSessionArgs(
   };
 }
 
-/** Drain the subprocess's JSONL stdout into the reader, tolerating non-JSON noise. */
-async function drainTurnStream(proc: ClaudeProcess, reader: TurnReader): Promise<void> {
-  for await (const line of proc.lines) {
-    const trimmed = line.trim();
-    if (trimmed === "") {
-      continue;
-    }
-    let event: Record<string, unknown>;
-    try {
-      event = JSON.parse(trimmed) as Record<string, unknown>;
-    } catch {
-      continue; // tolerate any non-JSON noise on the stream
-    }
-    reader.handle(event);
-  }
-}
-
-/**
- * Validate the drained turn and produce its result, mapping a reported harness
- * failure or a missing `result` event to the right typed error.
- */
-function resolveTurnResult(reader: TurnReader, proc: ClaudeProcess): SessionTurnResult {
-  const failure = reader.error();
-  if (failure !== undefined) {
-    throw failure.retryable
-      ? new FoomHarnessUnavailableError(failure.message)
-      : new FoomHarnessRejectedError(failure.message);
-  }
-  if (!reader.resultSeen()) {
-    const detail = proc.stderr().trim();
-    throw new FoomHarnessUnavailableError(detail.length > 0 ? detail : "claude produced no result");
-  }
-  return { assistantText: reader.assistantText(), usage: reader.usage() };
-}
-
 /**
  * Build an OpenSession backed by the `claude` CLI. Pass the result to runProgram's
  * `harnesses`. Models resolve through Claude Code itself (`--model`); auth comes
@@ -174,7 +138,9 @@ function createClaudeCliOpenSession(options: ClaudeCliSessionOptions = {}): Open
 
       const runTurn = async (request: SessionTurnRequest): Promise<SessionTurnResult> => {
         const { names, renamedTools, systemPrompt, prompt } = renameForModel(request, serverName);
-        const server = await startMcpServer(renamedTools, serverName);
+        const server = await startMcpServer(renamedTools, serverName, (tool) =>
+          applyRename(toolDescription(tool), names, serverName),
+        );
         const { newId, resumeSessionId, fork } = resolveSessionArgs(
           currentSessionId,
           seedSessionId,
@@ -204,12 +170,12 @@ function createClaudeCliOpenSession(options: ClaudeCliSessionOptions = {}): Open
         const reader = createTurnReader(serverName, request.onEvent);
         const proc = factory(spec);
         try {
-          await drainTurnStream(proc, reader);
+          await drainTurnStream(proc, reader.handle);
         } finally {
           await server.close();
         }
 
-        const result = resolveTurnResult(reader, proc);
+        const result = resolveTurnResult(reader, proc, "claude");
         currentSessionId = reader.sessionId() ?? newId ?? currentSessionId;
         return result;
       };

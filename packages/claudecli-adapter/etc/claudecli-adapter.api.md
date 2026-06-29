@@ -4,6 +4,7 @@
 
 ```ts
 
+import { CliProcess } from '@microfoom/adapter-base';
 import { OpenSession } from '@microfoom/core';
 
 // @public (undocumented)
@@ -18,13 +19,7 @@ export interface ClaudeCliSessionOptions {
 }
 
 // @public
-export interface ClaudeProcess {
-    // (undocumented)
-    kill: () => void;
-    // (undocumented)
-    readonly lines: AsyncIterable<string>;
-    stderr: () => string;
-}
+export type ClaudeProcess = CliProcess;
 
 // @public
 export type ClaudeProcessFactory = (spec: ClaudeSpec) => ClaudeProcess;

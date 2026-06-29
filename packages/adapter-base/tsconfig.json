@@ -6,5 +6,5 @@
     "tsBuildInfoFile": ".tsbuildinfo"
   },
   "include": ["src/**/*.ts"],
-  "references": [{ "path": "../microfoom-core" }, { "path": "../adapter-base" }]
+  "references": [{ "path": "../microfoom-core" }]
 }

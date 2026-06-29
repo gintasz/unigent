@@ -2,8 +2,10 @@
   "files": [],
   "references": [
     { "path": "./packages/microfoom-core" },
+    { "path": "./packages/adapter-base" },
     { "path": "./packages/pi-adapter" },
     { "path": "./packages/claudecli-adapter" },
+    { "path": "./packages/codexcli-adapter" },
     { "path": "./packages/microfoom-cli" }
   ]
 }

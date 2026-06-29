@@ -1,15 +1,15 @@
 {
-  "name": "@microfoom/claudecli-adapter",
+  "name": "@microfoom/codexcli-adapter",
   "version": "0.1.0",
   "type": "module",
-  "description": "Microfoom harness adapter for Claude Code CLI",
+  "description": "Microfoom harness adapter for the OpenAI Codex CLI",
   "keywords": [
     "microfoom",
     "agents",
     "llm",
     "harness",
-    "claude",
-    "claude-code",
+    "codex",
+    "openai",
     "typescript"
   ],
   "license": "MIT",
@@ -18,7 +18,7 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/gintasz/microfoom.git",
-    "directory": "packages/claudecli-adapter"
+    "directory": "packages/codexcli-adapter"
   },
   "bugs": "https://github.com/gintasz/microfoom/issues",
   "engines": {

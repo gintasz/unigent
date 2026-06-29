@@ -4,10 +4,8 @@
 // scripted model against the same in-process MCP server, so the whole adapter —
 // argv mapping aside — runs offline and deterministically.
 
-import { type ChildProcessByStdio, spawn } from "node:child_process";
 import process from "node:process";
-import { createInterface } from "node:readline";
-import type { Readable } from "node:stream";
+import { type CliProcess, spawnLineProcess } from "@microfoom/adapter-base";
 import { prefixedToolName } from "./rename.js";
 
 /** Everything one turn's subprocess needs. Harness-neutral; argv is built here. */
@@ -45,13 +43,8 @@ interface ClaudeSpec {
   readonly signal?: AbortSignal | undefined;
 }
 
-/** A running turn: its stdout lines, a kill switch, and any stderr seen. */
-interface ClaudeProcess {
-  readonly lines: AsyncIterable<string>;
-  kill: () => void;
-  /** Collected stderr (+ spawn error), available once `lines` is exhausted. */
-  stderr: () => string;
-}
+/** A running turn's subprocess (an alias of adapter-base's `CliProcess`). */
+type ClaudeProcess = CliProcess;
 
 /** Injected per-turn subprocess launcher. */
 type ClaudeProcessFactory = (spec: ClaudeSpec) => ClaudeProcess;
@@ -128,46 +121,15 @@ function buildArgs(spec: ClaudeSpec): string[] {
 
 /** The default factory: spawn the real `claude` binary. */
 function spawnClaude(spec: ClaudeSpec): ClaudeProcess {
-  let child: ChildProcessByStdio<null, Readable, Readable>;
-  let stderr = "";
-  try {
-    child = spawn("claude", buildArgs(spec), {
-      stdio: ["ignore", "pipe", "pipe"],
-      // Eager-load the FOOM tools instead of deferring them behind Claude Code's
-      // ToolSearch tool: the model must see the control tools (and their schemas)
-      // directly, every turn, to speak the protocol without an extra discovery
-      // round-trip. Honour an explicit override from the environment.
-      // biome-ignore lint/style/noProcessEnv: the child must inherit the full parent environment (model auth, PATH, …); forwarding raw process.env is the intent, not a config read to route through env.ts.
-      env: { ...process.env, ENABLE_TOOL_SEARCH: process.env["ENABLE_TOOL_SEARCH"] ?? "false" },
-      ...(spec.signal === undefined ? {} : { signal: spec.signal }),
-    });
-  } catch (error) {
-    // Synchronous spawn failure (e.g. binary missing): present an empty line
-    // stream so the caller surfaces it as an unavailable harness.
-    const message = String(error);
-    return {
-      lines: (async function* () {
-        /* spawn failed: emit no lines */
-      })(),
-      kill: () => {
-        /* nothing to kill: process never spawned */
-      },
-      stderr: () => message,
-    };
-  }
-
-  child.on("error", (error) => {
-    stderr += String(error);
+  return spawnLineProcess("claude", buildArgs(spec), {
+    // Eager-load the FOOM tools instead of deferring them behind Claude Code's
+    // ToolSearch tool: the model must see the control tools (and their schemas)
+    // directly, every turn, to speak the protocol without an extra discovery
+    // round-trip. Honour an explicit override from the environment.
+    // biome-ignore lint/style/noProcessEnv: the child must inherit the full parent environment (model auth, PATH, …); forwarding raw process.env is the intent, not a config read to route through env.ts.
+    env: { ...process.env, ENABLE_TOOL_SEARCH: process.env["ENABLE_TOOL_SEARCH"] ?? "false" },
+    ...(spec.signal === undefined ? {} : { signal: spec.signal }),
   });
-  child.stderr.on("data", (chunk: Buffer) => {
-    stderr += chunk.toString();
-  });
-
-  return {
-    lines: createInterface({ input: child.stdout }),
-    kill: () => child.kill("SIGTERM"),
-    stderr: () => stderr,
-  };
 }
 
 export type { ClaudeProcess, ClaudeProcessFactory, ClaudeSpec };

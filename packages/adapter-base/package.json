@@ -1,15 +1,14 @@
 {
-  "name": "@microfoom/claudecli-adapter",
+  "name": "@microfoom/adapter-base",
   "version": "0.1.0",
   "type": "module",
-  "description": "Microfoom harness adapter for Claude Code CLI",
+  "description": "Shared substrate for microfoom harness adapters: an in-process MCP tool server and stream→turn-result plumbing",
   "keywords": [
     "microfoom",
     "agents",
     "llm",
     "harness",
-    "claude",
-    "claude-code",
+    "mcp",
     "typescript"
   ],
   "license": "MIT",
@@ -18,7 +17,7 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/gintasz/microfoom.git",
-    "directory": "packages/claudecli-adapter"
+    "directory": "packages/adapter-base"
   },
   "bugs": "https://github.com/gintasz/microfoom/issues",
   "engines": {
@@ -43,7 +42,6 @@
     "api:check": "api-extractor run --verbose"
   },
   "dependencies": {
-    "@microfoom/adapter-base": "workspace:*",
     "@microfoom/core": "workspace:*"
   }
 }

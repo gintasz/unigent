@@ -4,46 +4,21 @@
 // → `foom_return`) so the run's event stream speaks core's vocabulary, not
 // Claude Code's namespacing.
 
+import {
+  asArray,
+  asNumber,
+  asObject,
+  asString,
+  EMPTY_USAGE,
+  type Json,
+  type TurnError,
+  type TurnReader,
+} from "@microfoom/adapter-base";
 import type { StreamEvent, UsageDelta } from "@microfoom/core";
 import { stripPrefix } from "./rename.js";
 
 /** A raw decoded stream-json line. Shapes are validated structurally as read. */
-type StreamJson = Record<string, unknown>;
-
-const asObject = (value: unknown): StreamJson | undefined =>
-  typeof value === "object" && value !== null ? (value as StreamJson) : undefined;
-
-const asArray = (value: unknown): readonly unknown[] => (Array.isArray(value) ? value : []);
-
-const asNumber = (value: unknown): number => (typeof value === "number" ? value : 0);
-
-const asString = (value: unknown): string | undefined =>
-  typeof value === "string" ? value : undefined;
-
-/** Why a turn ended badly (mapped to a FoomHarnessError by the caller). */
-interface TurnError {
-  readonly message: string;
-  /** Whether retrying could plausibly succeed (transient model/network/rate-limit). */
-  readonly retryable: boolean;
-}
-
-/** What the reader distils from a turn's stream. */
-interface TurnReader {
-  /** Feed one decoded stream-json object. */
-  handle: (event: StreamJson) => void;
-  /** The session id Claude assigned/echoed (for `--resume` continuity). */
-  sessionId: () => string | undefined;
-  /** True once the terminal `result` event was seen. */
-  resultSeen: () => boolean;
-  /** A turn error if the model/CLI failed, else undefined. */
-  error: () => TurnError | undefined;
-  /** Final assistant prose for the turn. */
-  assistantText: () => string;
-  /** Accumulated usage for the turn. */
-  usage: () => UsageDelta;
-}
-
-const EMPTY_USAGE: UsageDelta = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
+type StreamJson = Json;
 
 /** Map a stream-json `usage` block (+ optional cost) to a microfoom UsageDelta. */
 function usageFromResult(usageBlock: unknown, costUsd: number | undefined): UsageDelta {
@@ -221,5 +196,4 @@ function createTurnReader(
   };
 }
 
-export type { TurnReader };
 export { createTurnReader, usageFromResult };

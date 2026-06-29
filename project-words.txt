@@ -7,6 +7,10 @@ foomthrow
 foominspect
 claudecli
 codexcli
+codex
+rollout
+rollouts
+rmcp
 foomulator
 foomy
 streamable

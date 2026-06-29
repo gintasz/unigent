@@ -90,8 +90,26 @@ importers:
         specifier: 4.4.3
         version: 4.4.3
 
+  packages/adapter-base:
+    dependencies:
+      '@microfoom/core':
+        specifier: workspace:*
+        version: link:../microfoom-core
+
   packages/claudecli-adapter:
     dependencies:
+      '@microfoom/adapter-base':
+        specifier: workspace:*
+        version: link:../adapter-base
+      '@microfoom/core':
+        specifier: workspace:*
+        version: link:../microfoom-core
+
+  packages/codexcli-adapter:
+    dependencies:
+      '@microfoom/adapter-base':
+        specifier: workspace:*
+        version: link:../adapter-base
       '@microfoom/core':
         specifier: workspace:*
         version: link:../microfoom-core
@@ -104,6 +122,9 @@ importers:
       '@microfoom/claudecli-adapter':
         specifier: workspace:*
         version: link:../claudecli-adapter
+      '@microfoom/codexcli-adapter':
+        specifier: workspace:*
+        version: link:../codexcli-adapter
       '@microfoom/core':
         specifier: workspace:*
         version: link:../microfoom-core
