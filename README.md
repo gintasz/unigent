@@ -7,7 +7,7 @@
 
 **Typed building blocks for agentic coordination engineering.**
 
-[**Documentation**](https://gintasz.github.io/microfoom/)
+[**Documentation**](https://gintasz.github.io/microfoom/) [**Examples**](https://github.com/gintasz/microfoom/tree/main/examples)
 
 </div>
 
