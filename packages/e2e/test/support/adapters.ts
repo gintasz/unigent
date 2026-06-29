@@ -21,6 +21,7 @@ import {
 import type { OpenSession } from "@microfoom/core";
 import { createPiOpenSession } from "@microfoom/pi-adapter";
 import { claudecliE2EAdapter } from "./claudecli.ts";
+import { opencodeE2EAdapter } from "./opencode.ts";
 import type { ScriptStep } from "./script.ts";
 
 /** Everything a fixture needs to run a program once. */
@@ -89,7 +90,11 @@ function piE2EAdapter(): E2EAdapter {
 
 /** Every adapter the suite exercises. Append future adapters here; the fixtures
  *  never change. */
-const adapters: readonly E2EAdapter[] = [piE2EAdapter(), claudecliE2EAdapter()];
+const adapters: readonly E2EAdapter[] = [
+  piE2EAdapter(),
+  claudecliE2EAdapter(),
+  opencodeE2EAdapter(),
+];
 
 export type { E2EAdapter, RunContext };
 export { adapters, piE2EAdapter };

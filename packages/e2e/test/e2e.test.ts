@@ -30,7 +30,10 @@ for (const adapter of adapters) {
           }
           throw error;
         }
-      }, 60_000);
+        // Generous per-fixture cap: an adapter that spawns a fresh agent server per
+        // turn (e.g. opencode) needs real wall-clock for multi-tool / multi-turn
+        // fixtures. A hang is still caught — just later.
+      }, 120_000);
     }
   });
 }

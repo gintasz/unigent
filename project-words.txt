@@ -103,4 +103,7 @@ ktok
 worktrees
 combinator
 combinators
-memoized
+memoizedambiently
+webfetch
+todowrite
+todoread

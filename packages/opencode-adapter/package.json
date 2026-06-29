@@ -1,0 +1,48 @@
+{
+  "name": "@microfoom/opencode-adapter",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Microfoom harness adapter for the OpenCode agent (SDK)",
+  "keywords": [
+    "microfoom",
+    "agents",
+    "llm",
+    "harness",
+    "opencode",
+    "typescript"
+  ],
+  "license": "MIT",
+  "author": "Gintas Zenevskis <gintas.zenevskis@gmail.com>",
+  "homepage": "https://gintasz.github.io/microfoom/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gintasz/microfoom.git",
+    "directory": "packages/opencode-adapter"
+  },
+  "bugs": "https://github.com/gintasz/microfoom/issues",
+  "engines": {
+    "node": ">=24"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "api": "api-extractor run --local --verbose",
+    "api:check": "api-extractor run --verbose"
+  },
+  "dependencies": {
+    "@microfoom/core": "workspace:*",
+    "@opencode-ai/sdk": "1.17.9"
+  }
+}
