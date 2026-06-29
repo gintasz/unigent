@@ -17,6 +17,7 @@ const configArb: fc.Arbitrary<AgentConfig> = fc.record(
     maxBudgetUsd: fc.double({ min: 0, max: 1000, noNaN: true }),
     maxOutputTokens: fc.integer({ min: 0, max: 1_000_000 }),
     maxCallDepth: fc.integer({ min: 0, max: 100 }),
+    maxConcurrentTurns: fc.integer({ min: 1, max: 100 }),
     maxTurnDuration: durationArb,
   },
   { requiredKeys: [] },
@@ -38,8 +39,12 @@ describe("config cascade (F5)", () => {
   });
 
   it("a narrower scope cannot loosen a cap (tighten-only)", () => {
-    const merged = mergeConfig({ maxBudgetUsd: 5 }, { maxBudgetUsd: 100 });
+    const merged = mergeConfig(
+      { maxBudgetUsd: 5, maxConcurrentTurns: 2 },
+      { maxBudgetUsd: 100, maxConcurrentTurns: 8 },
+    );
     expect(merged.maxBudgetUsd).toBe(5);
+    expect(merged.maxConcurrentTurns).toBe(2);
   });
 
   it("append accumulates onto an inherited base", () => {
@@ -65,6 +70,11 @@ describe("config cascade (F5)", () => {
         for (const inherited of [wider.maxBudgetUsd, narrower.maxBudgetUsd]) {
           if (inherited !== undefined && merged.maxBudgetUsd !== undefined) {
             expect(merged.maxBudgetUsd).toBeLessThanOrEqual(inherited);
+          }
+        }
+        for (const inherited of [wider.maxConcurrentTurns, narrower.maxConcurrentTurns]) {
+          if (inherited !== undefined && merged.maxConcurrentTurns !== undefined) {
+            expect(merged.maxConcurrentTurns).toBeLessThanOrEqual(inherited);
           }
         }
       }),

@@ -20,6 +20,7 @@ export interface AgentConfig {
     harness?: string;
     maxBudgetUsd?: number;
     maxCallDepth?: number;
+    maxConcurrentTurns?: number;
     maxOutputTokens?: number;
     maxTurnDuration?: Duration;
     model?: string;

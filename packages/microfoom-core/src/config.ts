@@ -90,6 +90,10 @@ interface AgentConfig {
   /** Maximum nesting depth of `foom_call` re-entry; exceeding it aborts with
    *  {@link FoomCallDepthError}. Tighten-only. Absent = uncapped. */
   maxCallDepth?: number;
+  /** Maximum concurrent model turns in one program run. Tighten-only. Absent =
+   *  uncapped. FOOM tool handlers do not consume a slot while they run, so nested
+   *  `foom_call` re-entry cannot deadlock a single-slot run. */
+  maxConcurrentTurns?: number;
   /** Wall-clock ceiling on a single turn (a {@link Duration} like `"30s"`);
    *  exceeding it aborts with {@link FoomTimeoutError}. Tighten-only.
    *  Absent = uncapped. */
@@ -245,6 +249,9 @@ function compact(config: LooseConfig): AgentConfig {
   if (config.maxCallDepth !== undefined) {
     out.maxCallDepth = config.maxCallDepth;
   }
+  if (config.maxConcurrentTurns !== undefined) {
+    out.maxConcurrentTurns = config.maxConcurrentTurns;
+  }
   if (config.maxTurnDuration !== undefined) {
     out.maxTurnDuration = config.maxTurnDuration;
   }
@@ -270,6 +277,7 @@ function mergeConfig(wider: AgentConfig, narrower: AgentConfig): AgentConfig {
     maxBudgetUsd: mergeCap(wider.maxBudgetUsd, narrower.maxBudgetUsd),
     maxOutputTokens: mergeCap(wider.maxOutputTokens, narrower.maxOutputTokens),
     maxCallDepth: mergeCap(wider.maxCallDepth, narrower.maxCallDepth),
+    maxConcurrentTurns: mergeCap(wider.maxConcurrentTurns, narrower.maxConcurrentTurns),
     maxTurnDuration: mergeDuration(wider.maxTurnDuration, narrower.maxTurnDuration),
   };
   return compact(merged);

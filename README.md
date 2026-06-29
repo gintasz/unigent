@@ -158,6 +158,7 @@ Set config with `@foom.config({ ... })` on a class or method, with `.with({ ... 
 | `maxBudgetUsd` | Cost ceiling; exceeding aborts. Tighten-only. |
 | `maxOutputTokens` | Output-token ceiling. Tighten-only. |
 | `maxCallDepth` | Max `foom_call` re-entry depth. Tighten-only. |
+| `maxConcurrentTurns` | Max concurrent model turns in one run. Tighten-only. FOOM tool handlers do not consume a slot, so nested `foom_call` re-entry cannot deadlock a single-slot run. |
 | `maxTurnDuration` | Wall-clock ceiling for one turn (e.g. `"30s"`). Tighten-only. |
 
 A whole-program wall-clock ceiling is a `static maxProgramDuration` on the program class (e.g. `"5m"`).

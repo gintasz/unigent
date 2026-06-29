@@ -62,6 +62,9 @@ async function rejects<E extends Error>(
     if (guard(error)) {
       return error;
     }
+    if (error instanceof FoomHarnessError) {
+      throw error;
+    }
     throw new Error(`${label}: wrong rejection: ${String(error)}`, { cause: error });
   }
   throw new Error(`${label}: expected a rejection but the run succeeded`);

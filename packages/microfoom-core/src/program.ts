@@ -7,6 +7,7 @@
 
 import { AsyncLocalStorage } from "node:async_hooks";
 import type { StandardSchemaV1 } from "@standard-schema/spec";
+import { ConcurrencyGate, type ConcurrencyLease } from "./concurrency.js";
 import { type AgentConfig, durationToMs, mergeConfigChain } from "./config.js";
 import {
   FoomCancelledError,
@@ -285,6 +286,7 @@ interface Runtime {
   /** Program-level abort signal (RunProgramOptions.signal), combined into every
    *  turn's signal so an external abort cancels the whole run. */
   readonly signal?: AbortSignal;
+  readonly concurrency: ConcurrencyGate;
 }
 
 function emitAll(runtime: Runtime, event: AgentEvent): void {
@@ -423,6 +425,7 @@ interface Prepared {
   readonly model: string;
   readonly systemPrompt: string;
   readonly caps: ResolvedCaps;
+  readonly maxConcurrentTurns?: number;
   readonly thinking?: string;
   readonly tools?: readonly string[];
   readonly omitBasePrompt?: boolean;
@@ -489,10 +492,21 @@ function prepare(runtime: Runtime, options: AgentOptions, frozen?: FrozenIdentit
     frozen === undefined ? composeProgramSystemPrompt(runtime, merged) : frozen.systemPrompt;
   const omitBasePrompt =
     frozen === undefined ? merged.omitHarnessBasePrompt : frozen.omitBasePrompt;
+  if (
+    merged.maxConcurrentTurns !== undefined &&
+    (!Number.isSafeInteger(merged.maxConcurrentTurns) || merged.maxConcurrentTurns < 1)
+  ) {
+    throw new FoomConfigError(
+      `maxConcurrentTurns must be a positive integer, got ${merged.maxConcurrentTurns}`,
+    );
+  }
   const prepared: Prepared = {
     model: merged.model,
     systemPrompt,
     caps: resolveCaps(merged),
+    ...(merged.maxConcurrentTurns === undefined
+      ? {}
+      : { maxConcurrentTurns: merged.maxConcurrentTurns }),
     ...(merged.thinking === undefined ? {} : { thinking: merged.thinking }),
     ...(merged.tools === undefined ? {} : { tools: merged.tools }),
     ...(omitBasePrompt === undefined ? {} : { omitBasePrompt }),
@@ -622,6 +636,23 @@ function emitTurnEnd(
   });
 }
 
+function emitTurnMeta(
+  runtime: Runtime,
+  traced: boolean,
+  span: string,
+  session: HarnessSession,
+  systemPrompt: string,
+): void {
+  if (!traced) {
+    return;
+  }
+  emitAll(runtime, {
+    type: "turn_meta",
+    span,
+    systemPrompt: session.systemPrompt?.(systemPrompt) ?? systemPrompt,
+  });
+}
+
 /** Marshal the RunTurnParams for one turn: the per-turn fold/emit wiring plus the
  *  optional fields added only when set (so an absent value never overrides a
  *  resolved scope default). */
@@ -636,6 +667,7 @@ function buildRunTurnParams(args: {
   options: AgentOptions;
   onStreamChunk: ((chunk: string) => void) | undefined;
   signal: AbortSignal;
+  capacityLease: ConcurrencyLease;
   fold: (delta: UsageAccount) => UsageAccount;
 }): RunTurnParams {
   const { prepared, runtime, span, traced, options, onStreamChunk } = args;
@@ -656,6 +688,7 @@ function buildRunTurnParams(args: {
     ...(options.onToken === undefined ? {} : { onToken: options.onToken }),
     ...(onStreamChunk === undefined ? {} : { onStreamChunk }),
     signal: args.signal,
+    capacityLease: args.capacityLease,
   };
 }
 
@@ -681,36 +714,29 @@ async function driveTurn(
   onStreamChunk?: (chunk: string) => void,
 ): Promise<TurnOutcome> {
   const { runtime, options, source, parentSpan, frozen } = deps;
-  // Combine the per-turn signal (e.g. maxTurnDuration timeout) with the program-level
-  // abort signal so an external `.abort()` cancels the in-flight turn and all that follow.
   const signal =
     runtime.signal === undefined ? turnSignal : AbortSignal.any([turnSignal, runtime.signal]);
-  const prepared = prepare(runtime, options, frozen);
-  const span = runtime.nextSpan();
-  const traced = runtime.listeners.size > 0;
-  // A turn is a span leaf: its usage is the real harness delta(s) folded here.
   let turnDelta = emptyUsage;
-  if (traced) {
-    emitTurnStart(runtime, span, mode, options, parentSpan);
-  }
-  const turnPrompt = buildTurnPrompt(mode, prompt);
-  const startedAt = Date.now();
+  let capacityLease: ConcurrencyLease | undefined;
+  let span: string | undefined;
+  let traced = false,
+    startedAt = 0;
   try {
-    // Don't start a turn on an already-aborted run — covers harnesses that don't
-    // honour the signal mid-stream, so an abort still lands at the next turn boundary.
+    const prepared = prepare(runtime, options, frozen);
+    capacityLease = await runtime.concurrency.acquire(prepared.maxConcurrentTurns, signal);
+    span = runtime.nextSpan();
+    traced = runtime.listeners.size > 0;
+    if (traced) {
+      emitTurnStart(runtime, span, mode, options, parentSpan);
+    }
+    const turnPrompt = buildTurnPrompt(mode, prompt);
+    startedAt = Date.now();
+    // Covers harnesses that don't honour the signal mid-stream.
     if (signal.aborted) {
       throw new FoomCancelledError("the agent run was aborted");
     }
     const session = await source.get();
-    // The exact system prompt the model saw this turn, sourced from the session
-    // (so a harness that prepends its own base prompt shows the composed whole).
-    if (traced) {
-      emitAll(runtime, {
-        type: "turn_meta",
-        span,
-        systemPrompt: session.systemPrompt?.(prepared.systemPrompt) ?? prepared.systemPrompt,
-      });
-    }
+    emitTurnMeta(runtime, traced, span, session, prepared.systemPrompt);
     const fold = (delta: UsageAccount): UsageAccount => {
       if (traced) {
         turnDelta = combineUsage(turnDelta, delta);
@@ -718,9 +744,9 @@ async function driveTurn(
       runtime.usage = combineUsage(runtime.usage, delta);
       return runtime.usage;
     };
-    // Run the turn body under this span so a method the agent foom_calls
-    // mid-turn (and its own turns) nest beneath it.
-    return await runtime.spanALS.run(span, async () =>
+    const activeSpan = span;
+    const activeCapacityLease = capacityLease;
+    return await runtime.spanALS.run(activeSpan, async () =>
       runProgramTurn(
         buildRunTurnParams({
           session,
@@ -728,11 +754,12 @@ async function driveTurn(
           turnPrompt,
           mode,
           runtime,
-          span,
+          span: activeSpan,
           traced,
           options,
           onStreamChunk,
           signal,
+          capacityLease: activeCapacityLease,
           fold,
         }),
       ),
@@ -746,9 +773,10 @@ async function driveTurn(
     }
     throw error;
   } finally {
-    if (traced) {
+    if (traced && span !== undefined) {
       emitTurnEnd(runtime, span, startedAt, turnDelta);
     }
+    capacityLease?.dispose();
     if (source.guard !== undefined) {
       source.guard.inFlight = false;
     }
@@ -1176,6 +1204,7 @@ async function runProgram<P extends FoomProgram<never, unknown>>(
     depth: 0,
     methodConfig: undefined,
     spanALS: new AsyncLocalStorage<string | undefined>(),
+    concurrency: new ConcurrencyGate(),
   };
 
   // Wire an external subscriber (CLI/harness renderer) before main() runs, so the
