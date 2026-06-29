@@ -71,7 +71,9 @@ jobs:
         uses: changesets/action@v1
         with:
           version: pnpm run version-packages
-          publish: ${{ (steps.npm_auth.outputs.present == 'true' && contains(github.event.head_commit.message, 'chore: version packages')) && 'pnpm run release' || '' }}
+          # Quoted: the expression embeds "chore: version packages", whose
+          # ": " would otherwise make YAML parse this value as a mapping.
+          publish: "${{ (steps.npm_auth.outputs.present == 'true' && contains(github.event.head_commit.message, 'chore: version packages')) && 'pnpm run release' || '' }}"
           title: "chore: version packages"
           commit: "chore: version packages"
         env:
