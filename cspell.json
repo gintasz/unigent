@@ -15,6 +15,7 @@
     "**/*.api.md",
     "etc/**",
     "docs/design/**",
+    "docs/audit/**",
     "docs-website/**"
   ]
 }

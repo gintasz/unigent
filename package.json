@@ -45,7 +45,7 @@
     "lint:types": "eslint .",
     "arch": "depcruise packages --config .dependency-cruiser.cjs",
     "ast": "ast-grep scan",
-    "spell": "cspell --no-progress \"**/*.{ts,tsx,js,cjs,mjs,md,json,yml,yaml}\"",
+    "spell": "cspell --no-progress --gitignore-root . \"**/*.{ts,tsx,js,cjs,mjs,md,json,yml,yaml}\"",
     "deps:check": "syncpack lint",
     "deps:fix": "syncpack fix",
     "audit": "pnpm audit --audit-level=high",
