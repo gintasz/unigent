@@ -22,6 +22,7 @@ export default defineConfig({
     include: ["packages/*/test/**/*.test.ts"],
     environment: "node",
     passWithNoTests: true,
+    testTimeout: 15_000,
     coverage: {
       // Report-only (not a gate): prints a text summary to stdout, writes nothing
       // to disk, and never fails the build. To turn it back into a ratchet gate,

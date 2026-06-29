@@ -1,7 +1,7 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "ignore": ["docs-website/**"],
-  "ignoreBinaries": ["claude"],
+  "ignoreBinaries": ["claude", "scripts/ci-docker.sh"],
   "ignoreExportsUsedInFile": false,
   "workspaces": {
     ".": { "entry": ["examples/*.ts"] },

@@ -49,6 +49,7 @@
     "deps:check": "syncpack lint",
     "deps:fix": "syncpack fix",
     "audit": "pnpm audit --audit-level=high",
+    "check:docker": "scripts/ci-docker.sh",
     "dead": "knip",
     "dup": "jscpd packages",
     "api": "pnpm -r --if-present run api",
