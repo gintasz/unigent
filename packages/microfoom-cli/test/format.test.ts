@@ -38,7 +38,7 @@ describe("format", () => {
         },
         12_400,
       ),
-    ).toBe("12s  10tok  $0.21  2 calls");
+    ).toBe("12s  10tok  $0.21");
     expect(
       fmtSummary({ inputTokens: 0, outputTokens: 0, totalTokens: 0, calls: 0, maxCallDepth: 0 }, 5),
     ).toBe("<1s  0tok");

@@ -61,8 +61,5 @@ export function fmtSummary(usage: AgentUsage, durationMs: number | undefined): s
   if (cost.length > 0) {
     parts.push(cost);
   }
-  if (usage.calls > 0) {
-    parts.push(`${usage.calls} call${usage.calls === 1 ? "" : "s"}`);
-  }
   return parts.join("  ");
 }
