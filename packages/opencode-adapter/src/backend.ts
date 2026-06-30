@@ -13,7 +13,12 @@
 import { type AddressInfo, createServer } from "node:net";
 import { FoomHarnessRejectedError, type StreamEvent } from "@microfoom/core";
 import { createOpencodeClient, createOpencodeServer } from "@opencode-ai/sdk";
-import { emitMessageParts, readPromptResponse, type TurnOutcome } from "./result.js";
+import {
+  emitMessageParts,
+  readPromptResponse,
+  type TurnOutcome,
+  usageFromInfos,
+} from "./result.js";
 
 /** The OpenCode config object injected into the child via `OPENCODE_CONFIG_CONTENT`. */
 type OpenCodeConfig = Record<string, unknown>;
@@ -116,20 +121,26 @@ async function messagesOf(
   return response.data ?? [];
 }
 
-/** Replay the assistant messages a prompt produced (those not present before) as a
- *  StreamEvent transcript — the only place tool calls/results surface, since
- *  `session.prompt`'s return omits them. */
-function emitNewTranscript(
+/** The assistant messages this turn produced: those recorded now (`after`) that
+ *  weren't present before (`before`). OpenCode splits one turn into several. */
+function freshAssistantMessages(
   before: ReadonlySet<string>,
   after: readonly RecordedMessage[],
+): readonly RecordedMessage[] {
+  return after.filter((message) => {
+    const id = message.info?.id;
+    return id !== undefined && !before.has(id) && message.info?.role === "assistant";
+  });
+}
+
+/** Replay a turn's assistant messages as a StreamEvent transcript — the only place
+ *  tool calls/results surface, since `session.prompt`'s return omits them. */
+function emitTranscript(
+  messages: readonly RecordedMessage[],
   serverName: string,
   onEvent: (event: StreamEvent) => void,
 ): void {
-  for (const message of after) {
-    const id = message.info?.id;
-    if (id === undefined || before.has(id) || message.info?.role !== "assistant") {
-      continue;
-    }
+  for (const message of messages) {
     emitMessageParts(message.parts ?? [], serverName, onEvent);
   }
 }
@@ -151,16 +162,13 @@ async function runPrompt(
       spec.signal.addEventListener("abort", onAbort, { once: true });
     }
   }
-  // Snapshot the prior messages so we replay only this turn's new ones (skipped
-  // entirely when no one is listening).
-  const priorIds: ReadonlySet<string> =
-    spec.onEvent === undefined
-      ? new Set()
-      : new Set(
-          (await messagesOf(client, sessionId))
-            .map((message) => message.info?.id)
-            .filter((id): id is string => id !== undefined),
-        );
+  // Snapshot the prior messages so we can isolate this turn's new ones — needed for
+  // accurate usage (OpenCode splits a turn across several messages) and the transcript.
+  const priorIds = new Set(
+    (await messagesOf(client, sessionId))
+      .map((message) => message.info?.id)
+      .filter((id): id is string => id !== undefined),
+  );
   try {
     const response = await client.session.prompt({
       path: { id: sessionId },
@@ -171,18 +179,23 @@ async function runPrompt(
         parts: [{ type: "text", text: spec.prompt }],
       },
     });
-    // assistantText + usage come from the returned message; the live transcript
-    // (tool calls/results) is replayed from the freshly recorded messages.
-    const outcome = readPromptResponse(response, spec.serverName, undefined);
+    // assistantText + error come from the returned (final) message; usage is summed
+    // across ALL of this turn's messages so multi-step token/reasoning/cost counts
+    // are complete (the final message alone omits the tool-call step's reasoning).
+    const base = readPromptResponse(response, spec.serverName, undefined);
+    const fresh = freshAssistantMessages(priorIds, await messagesOf(client, sessionId));
+    const usage =
+      fresh.length > 0
+        ? usageFromInfos(fresh.map((message) => (message.info ?? {}) as Record<string, unknown>))
+        : base.usage;
     if (spec.onEvent !== undefined) {
-      emitNewTranscript(
-        priorIds,
-        await messagesOf(client, sessionId),
-        spec.serverName,
-        spec.onEvent,
-      );
+      emitTranscript(fresh, spec.serverName, spec.onEvent);
     }
-    return outcome;
+    return {
+      assistantText: base.assistantText,
+      usage,
+      ...(base.error ? { error: base.error } : {}),
+    };
   } finally {
     spec.signal?.removeEventListener("abort", onAbort);
   }

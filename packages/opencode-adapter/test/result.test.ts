@@ -1,6 +1,6 @@
 import type { StreamEvent } from "@microfoom/core";
 import { describe, expect, it } from "vitest";
-import { readPromptResponse, usageFromInfo } from "../src/result.ts";
+import { readPromptResponse, usageFromInfo, usageFromInfos } from "../src/result.ts";
 
 describe("usageFromInfo", () => {
   it("maps tokens + cost, preferring the reported total", () => {
@@ -29,6 +29,31 @@ describe("usageFromInfo", () => {
 
   it("returns a zero usage when tokens are absent", () => {
     expect(usageFromInfo({})).toEqual({ inputTokens: 0, outputTokens: 0, totalTokens: 0 });
+  });
+});
+
+describe("usageFromInfos (sum across a turn's messages)", () => {
+  it("sums tokens/reasoning/cost so a multi-step turn isn't undercounted", () => {
+    const toolStep = {
+      cost: 0.002,
+      tokens: { input: 100, output: 5, reasoning: 2000, cache: { read: 0, write: 0 }, total: 2105 },
+    };
+    const finalStep = {
+      cost: 0.001,
+      tokens: { input: 110, output: 30, reasoning: 0, cache: { read: 50, write: 0 }, total: 190 },
+    };
+    expect(usageFromInfos([toolStep, finalStep])).toEqual({
+      inputTokens: 210,
+      outputTokens: 35,
+      totalTokens: 2295,
+      reasoningTokens: 2000,
+      cachedInputTokens: 50,
+      costUsd: 0.003,
+    });
+  });
+
+  it("is empty for no messages", () => {
+    expect(usageFromInfos([])).toEqual({ inputTokens: 0, outputTokens: 0, totalTokens: 0 });
   });
 });
 

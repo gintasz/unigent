@@ -1,7 +1,7 @@
 // Skills/plugins scoping: the tri-state config → OpenCode session controls, and the
 // end-to-end wiring from run config to the spawned child's config.
 
-import { FoomConfigError, makeStandardSchema, Program, runProgram } from "@microfoom/core";
+import { makeStandardSchema, Program, runProgram } from "@microfoom/core";
 import { describe, expect, it } from "vitest";
 import type { OpenCodeBackend, OpenCodeBackendFactory, OpenCodeConfig } from "../src/backend.ts";
 import { buildSessionControls } from "../src/controls.ts";
@@ -24,13 +24,17 @@ describe("buildSessionControls (config → opencode controls)", () => {
     expect(buildSessionControls(undefined, []).plugins).toBeUndefined();
   });
 
-  it("skills:[] and undefined are accepted (skill tool is off either way)", () => {
-    expect(() => buildSessionControls([], undefined)).not.toThrow();
-    expect(() => buildSessionControls(undefined, undefined)).not.toThrow();
+  it("skills undefined or [] yield no allow-list (skill tool stays off)", () => {
+    expect(buildSessionControls(undefined, undefined).skillPermission).toBeUndefined();
+    expect(buildSessionControls([], undefined).skillPermission).toBeUndefined();
   });
 
-  it("a skills allow-list is unsupported and throws", () => {
-    expect(() => buildSessionControls(["deploy"], undefined)).toThrow(FoomConfigError);
+  it("a skills allow-list allows the named skills and denies the rest", () => {
+    expect(buildSessionControls(["deploy", "review"], undefined).skillPermission).toEqual({
+      "*": "deny",
+      deploy: "allow",
+      review: "allow",
+    });
   });
 });
 
@@ -98,14 +102,42 @@ describe("config reaches the opencode child (offline)", () => {
     expect(seen()?.["share"]).toBe("disabled");
   });
 
-  it("a skills allow-list fails the run with FoomConfigError", async () => {
-    const { openSession } = capturingHarness();
-    await expect(
-      runProgram(Echo, "x", {
-        harnesses: { opencode: openSession },
-        model: "openrouter/x/y",
-        defaults: { tools: [], skills: ["deploy"] },
-      }),
-    ).rejects.toBeInstanceOf(FoomConfigError);
+  it("a skills allow-list reaches the child as permission.skill + an enabled skill tool", async () => {
+    const { openSession, seen } = capturingHarness();
+    await runProgram(Echo, "x", {
+      harnesses: { opencode: openSession },
+      model: "openrouter/x/y",
+      defaults: { tools: [], skills: ["deploy"] },
+    });
+    const permission = seen()?.["permission"] as { skill?: Record<string, string> };
+    expect(permission.skill).toEqual({ "*": "deny", deploy: "allow" });
+    // with an allow-list the skill tool is left enabled (not forced off)
+    const tools = seen()?.["tools"] as Record<string, boolean>;
+    expect(tools["skill"]).toBeUndefined();
+  });
+
+  it("a requested thinking level becomes the model's reasoningEffort", async () => {
+    const { openSession, seen } = capturingHarness();
+    await runProgram(Echo, "x", {
+      harnesses: { opencode: openSession },
+      model: "openrouter/deepseek/deepseek-v4-flash",
+      defaults: { tools: [], thinking: "high" },
+    });
+    const provider = seen()?.["provider"] as Record<
+      string,
+      { models: Record<string, { options: { reasoningEffort: string } }> }
+    >;
+    const opts = provider["openrouter"]?.models["deepseek/deepseek-v4-flash"]?.options;
+    expect(opts?.reasoningEffort).toBe("high");
+  });
+
+  it("no thinking → no provider reasoning override", async () => {
+    const { openSession, seen } = capturingHarness();
+    await runProgram(Echo, "x", {
+      harnesses: { opencode: openSession },
+      model: "openrouter/x/y",
+      defaults: { tools: [] },
+    });
+    expect(seen()?.["provider"]).toBeUndefined();
   });
 });

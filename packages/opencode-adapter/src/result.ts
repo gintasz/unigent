@@ -50,6 +50,29 @@ function usageFromInfo(info: Json): UsageDelta {
   };
 }
 
+/** Sum two usage deltas; optional fields combine, treating absence as zero. */
+function addUsage(a: UsageDelta, b: UsageDelta): UsageDelta {
+  const reasoning = (a.reasoningTokens ?? 0) + (b.reasoningTokens ?? 0);
+  const cached = (a.cachedInputTokens ?? 0) + (b.cachedInputTokens ?? 0);
+  const cost = (a.costUsd ?? 0) + (b.costUsd ?? 0);
+  return {
+    inputTokens: a.inputTokens + b.inputTokens,
+    outputTokens: a.outputTokens + b.outputTokens,
+    totalTokens: a.totalTokens + b.totalTokens,
+    ...(reasoning > 0 ? { reasoningTokens: reasoning } : {}),
+    ...(cached > 0 ? { cachedInputTokens: cached } : {}),
+    ...(cost > 0 ? { costUsd: cost } : {}),
+  };
+}
+
+/** Sum per-message usage across a turn's assistant messages. OpenCode splits one
+ *  turn into several messages (a step per tool round), each carrying its own
+ *  `info.tokens` — reading only the last would miss earlier steps' tokens (notably
+ *  reasoning, which lands on the step that called the tool). */
+function usageFromInfos(infos: readonly Json[]): UsageDelta {
+  return infos.reduce<UsageDelta>((acc, info) => addUsage(acc, usageFromInfo(info)), EMPTY_USAGE);
+}
+
 /** A model-side error block on the assistant message, if any. */
 function errorFromInfo(info: Json): TurnError | undefined {
   const error = asObject(info["error"]);
@@ -163,4 +186,4 @@ function readPromptResponse(
 }
 
 export type { TurnOutcome };
-export { emitMessageParts, readPromptResponse, usageFromInfo };
+export { emitMessageParts, readPromptResponse, usageFromInfo, usageFromInfos };

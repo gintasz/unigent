@@ -146,22 +146,59 @@ function throwOnTurnError(outcome: TurnOutcome): void {
     : new FoomHarnessRejectedError(outcome.error.message);
 }
 
+/** Map a microfoom `ThinkingLevel` onto OpenCode's `reasoningEffort` value. The
+ *  known levels (`low`/`medium`/`high`) and provider-passthrough raw strings
+ *  (`minimal`/`xhigh`/…) align 1:1; only `off` needs renaming to `none`. */
+function mapReasoningEffort(thinking: string): string {
+  return thinking === "off" ? "none" : thinking;
+}
+
+/** Per-turn provider override carrying this turn's reasoning effort. OpenCode has no
+ *  per-prompt reasoning field, but it reads it from `provider.<id>.models.<id>.options`
+ *  — and since we spawn a fresh server per turn with fresh config, that IS per-turn. */
+function reasoningConfig(
+  model: { providerID: string; modelID: string },
+  thinking: string | undefined,
+): OpenCodeConfig {
+  if (thinking === undefined) {
+    return {};
+  }
+  return {
+    provider: {
+      [model.providerID]: {
+        models: { [model.modelID]: { options: { reasoningEffort: mapReasoningEffort(thinking) } } },
+      },
+    },
+  };
+}
+
 /** Build the OpenCode child config: serve the FOOM MCP tools, keep the session
- *  hermetic (no skills, no sharing, no auto-update), and pre-allow tool permissions
- *  so an enabled tool never blocks on an interactive prompt. */
+ *  hermetic (no sharing, no auto-update), pre-allow tool permissions so an enabled
+ *  tool never blocks on an interactive prompt, apply this turn's reasoning effort,
+ *  and gate skills (disabled by default; a list opens a `permission.skill` allow-list). */
 function buildConfig(
   mcpUrl: string,
   serverName: string,
   controls: OpenCodeSessionControls,
+  model: { providerID: string; modelID: string },
+  thinking: string | undefined,
 ): OpenCodeConfig {
+  const { skillPermission } = controls;
   return {
     mcp: { [serverName]: { type: "remote", url: mcpUrl, enabled: true } },
-    // `skill: false` both disables the skill tool and skips OpenCode's skill scan.
-    tools: { skill: false },
-    permission: { edit: "allow", bash: "allow", webfetch: "allow" },
+    // No allow-list → disable the skill tool (hermetic + skips OpenCode's skill scan).
+    // An allow-list leaves the tool enabled; `permission.skill` restricts which load.
+    tools: skillPermission === undefined ? { skill: false } : {},
+    permission: {
+      edit: "allow",
+      bash: "allow",
+      webfetch: "allow",
+      ...(skillPermission === undefined ? {} : { skill: skillPermission }),
+    },
     share: "disabled",
     autoupdate: false,
     ...(controls.plugins === undefined ? {} : { plugin: [...controls.plugins] }),
+    ...reasoningConfig(model, thinking),
   };
 }
 
@@ -194,7 +231,8 @@ function createOpenCodeOpenSession(options: OpenCodeSessionOptions = {}): OpenSe
           serverName,
           makeDescribe(names, serverName),
         );
-        const backend = await factory({ config: buildConfig(mcp.url, serverName, controls) });
+        const config = buildConfig(mcp.url, serverName, controls, model, request.thinking);
+        const backend = await factory({ config });
         try {
           currentSessionId = await resolveSessionId(backend, currentSessionId, seedSessionId);
           const spec: PromptSpec = {
