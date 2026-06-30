@@ -5,5 +5,5 @@ name = "microfoom"
 [setup]
 script = '''
 cd "$CODEX_WORKTREE_PATH"
-./scripts/worktree-bootstrap.sh
+./scripts/worktree-bootstrap.sh "$CODEX_WORKTREE_PATH"
 '''
