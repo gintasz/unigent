@@ -12,6 +12,7 @@ import type { RepairChannel } from "./errors.js";
 import {
   FoomBudgetExceededError,
   FoomCallDepthError,
+  FoomCancelledError,
   FoomConfigError,
   FoomError,
   FoomHarnessUnavailableError,
@@ -311,20 +312,43 @@ function buildTurnTools(
   return tools;
 }
 
-// eslint-disable-next-line @typescript-eslint/promise-function-async -- builds timing plumbing via `new Promise`; `async` would wrap a promise in a promise for nothing.
-function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+/**
+ * Settle a harness turn against the two reasons to stop waiting for it before it
+ * finishes naturally: an external abort (`signal`) and the per-turn timeout (`ms`).
+ * Either rejects the awaiter *immediately* — decoupling "stop waiting" (here) from
+ * "stop working" (the adapter honouring `request.signal` to tear the turn down).
+ * Without this, abort latency is the downstream's teardown latency: a child that
+ * traps SIGTERM, a server that finishes the run first, or a harness that ignores
+ * the signal entirely all make the turn run to completion before the awaiter
+ * unblocks. The loser promise keeps running (its work is being cancelled via the
+ * signal); we swallow its late settlement so it can't surface as an unhandled
+ * rejection.
+ */
+// eslint-disable-next-line @typescript-eslint/promise-function-async -- builds timing/abort plumbing via `new Promise`; `async` would wrap a promise in a promise for nothing.
+function settleTurn<T>(
+  promise: Promise<T>,
+  ms: number | undefined,
+  signal: AbortSignal | undefined,
+): Promise<T> {
   return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new FoomTimeoutError(`turn exceeded ${ms}ms`)), ms);
-    promise.then(
-      (value) => {
+    const timer =
+      ms === undefined
+        ? undefined
+        : setTimeout(() => reject(new FoomTimeoutError(`turn exceeded ${ms}ms`)), ms);
+    const onAbort = (): void => reject(new FoomCancelledError("the agent run was aborted"));
+    if (signal !== undefined) {
+      if (signal.aborted) {
+        onAbort();
+      } else {
+        signal.addEventListener("abort", onAbort, { once: true });
+      }
+    }
+    promise.then(resolve, reject).finally(() => {
+      if (timer !== undefined) {
         clearTimeout(timer);
-        resolve(value);
-      },
-      (error: unknown) => {
-        clearTimeout(timer);
-        reject(error);
-      },
-    );
+      }
+      signal?.removeEventListener("abort", onAbort);
+    });
   });
 }
 
@@ -509,9 +533,7 @@ async function runHarnessTurn(
   for (let attempt = 0; ; attempt += 1) {
     try {
       const turnPromise = params.session.runTurn(request);
-      return params.caps.maxTurnDurationMs === undefined
-        ? await turnPromise
-        : await withTimeout(turnPromise, params.caps.maxTurnDurationMs);
+      return await settleTurn(turnPromise, params.caps.maxTurnDurationMs, params.signal);
     } catch (error) {
       if (
         attempt < max &&

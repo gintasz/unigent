@@ -48,6 +48,7 @@ import {
   type Skill,
 } from "@earendil-works/pi-coding-agent";
 import {
+  FoomCancelledError,
   FoomHarnessRejectedError,
   FoomHarnessUnavailableError,
   type HarnessSession,
@@ -501,12 +502,36 @@ function makePiHarnessSession(deps: SessionDeps, seed?: readonly AgentMessage[])
       );
       const activeAgent = ensureAgent(systemPrompt, thinkingLevel, tools);
 
+      // Honour request.signal (F6): an external abort (e.g. the CLI's Ctrl+R) must
+      // stop the pi run mid-stream, not after the turn completes. pi's Agent owns
+      // its own per-run AbortController, so bridge the external signal to
+      // agent.abort(). pi RESOLVES (never throws) on abort, leaving a final
+      // assistant message with stopReason "aborted"; surface that as a cancellation
+      // so the runtime classifies it like every other adapter instead of returning
+      // a truncated turn. (Core also races the await against the signal, so the
+      // caller already unblocks instantly — this is the matching teardown so the
+      // model work actually stops rather than running on detached.)
+      const { signal } = request;
+      // Read live each time: `signal.aborted` is a getter that flips across the
+      // await, but control-flow analysis would otherwise pin it to its pre-await
+      // value. A call boundary keeps both checks honest.
+      const wasAborted = (): boolean => signal?.aborted === true;
+      if (wasAborted()) {
+        throw new FoomCancelledError("the agent run was aborted");
+      }
+      const onAbort = (): void => activeAgent.abort();
+      signal?.addEventListener("abort", onAbort, { once: true });
+
       const unsubscribe = subscribeStream(activeAgent, request.onEvent);
       const before = activeAgent.state.messages.length;
       try {
         await activeAgent.prompt(request.prompt);
       } finally {
+        signal?.removeEventListener("abort", onAbort);
         unsubscribe?.();
+      }
+      if (wasAborted()) {
+        throw new FoomCancelledError("the agent run was aborted");
       }
       const newMessages = activeAgent.state.messages.slice(before);
       logTurn(logFile, model.id, request, newMessages, tools);
