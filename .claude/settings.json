@@ -1,13 +1,14 @@
 {
   "hooks": {
-    "WorktreeCreate": [
+    "SessionStart": [
       {
+        "matcher": "startup",
         "hooks": [
           {
             "type": "command",
             "command": "bash scripts/worktree-bootstrap.sh",
             "timeout": 600,
-            "statusMessage": "Bootstrapping new worktree…"
+            "statusMessage": "Bootstrapping worktree…"
           }
         ]
       }

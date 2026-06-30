@@ -21,10 +21,12 @@ worktrees/
 
 .serena/
 .pi/
-.claude/*
-!.claude/settings.json
 .opencode/
 .cursor/
+.claude/*
+!.claude/settings.json
+.codex/*
+!.codex/environments/environment.toml
 
 # Turborepo
 .turbo
