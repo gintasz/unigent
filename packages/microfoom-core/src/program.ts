@@ -950,11 +950,11 @@ function makeRun(
     const { stream, sink } = makeTextStream({
       run: async (signal: AbortSignal) => {
         try {
-          const outcome = await driveTurn(deps, { kind: "text" }, prompt, signal, (chunk) =>
+          const outcome = await driveTurn(deps, { kind: "prose" }, prompt, signal, (chunk) =>
             sink.push(chunk),
           );
           sink.end();
-          return outcome.kind === "text" ? outcome.text : "";
+          return outcome.kind === "prose" ? outcome.text : "";
         } catch (error) {
           sink.fail(error);
           throw error;

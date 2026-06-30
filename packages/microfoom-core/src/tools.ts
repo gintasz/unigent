@@ -68,16 +68,16 @@ interface ProgramTurnContext {
   readonly depth: () => number;
 }
 
-/** How a turn ends: streamed prose (`text`), a schema-validated value, or `do` —
+/** How a turn ends: streamed prose (`prose`), a schema-validated value, or `do` —
  *  act via tools and terminate with a no-arg foom_return (no value, cheap). */
 type TurnMode =
-  | { readonly kind: "text" }
+  | { readonly kind: "prose" }
   | { readonly kind: "value"; readonly schema: StandardSchemaV1 }
   | { readonly kind: "do" };
 
 /** What a turn produced. */
 type TurnOutcome =
-  | { readonly kind: "text"; readonly text: string }
+  | { readonly kind: "prose"; readonly text: string }
   | { readonly kind: "value"; readonly value: unknown }
   | { readonly kind: "do" };
 
@@ -509,8 +509,8 @@ function settleOutcome(
   if (capture.thrown !== undefined) {
     throw new FoomThrowError(capture.thrown.message, capture.thrown.code);
   }
-  if (mode.kind === "text") {
-    return { kind: "text", text: assistantText };
+  if (mode.kind === "prose") {
+    return { kind: "prose", text: assistantText };
   }
   if (capture.has) {
     return mode.kind === "do" ? { kind: "do" } : { kind: "value", value: capture.value };
