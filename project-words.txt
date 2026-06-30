@@ -117,3 +117,5 @@ todowrite
 todoread
 undercount
 undercounted
+pitchwright
+punchiness

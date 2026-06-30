@@ -21,7 +21,8 @@ worktrees/
 
 .serena/
 .pi/
-.claude/
+.claude/*
+!.claude/settings.json
 .opencode/
 .cursor/
 
