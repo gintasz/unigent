@@ -103,12 +103,12 @@ git -C "$workdir" init -q
 docker_command='
 set -euo pipefail
 corepack enable
-pnpm install --frozen-lockfile
-pnpm run check
+corepack pnpm install --frozen-lockfile
+corepack pnpm run check
 if [ "${RUN_DOCS}" = "true" ]; then
   cd docs-website
-  pnpm install --frozen-lockfile --ignore-workspace
-  pnpm run build
+  corepack pnpm install --frozen-lockfile --ignore-workspace
+  corepack pnpm run build
 fi
 '
 

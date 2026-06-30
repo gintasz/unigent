@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 // `microfoom run <file> [input]` — the default way to run a program file. Added
-// value over `node --import tsx run.ts`: zero per-program boilerplate, model/key
-// resolved from ~/.pi (via the pi harness), and a live run panel (span tree with
-// cost/latency/repairs). Output discipline: the program result goes to STDOUT
-// (clean, pipeable, --json for machines); all observability goes to STDERR.
+// value over `node --import tsx run.ts`: zero per-program boilerplate, model
+// resolved from flags/env, and a live run panel (span tree with cost/latency/
+// repairs). Output discipline: the program result goes to STDOUT (clean,
+// pipeable, --json for machines); all observability goes to STDERR.
 //
 // Modes: interactive TTY → live panel by default; piped/redirected → auto-headless
 // (no ANSI). Force with --panel / --headless. `--harness fake` runs offline (no model).
@@ -14,23 +14,14 @@ import { dirname, isAbsolute, resolve } from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
-import { type OpenSession, runProgram } from "@microfoom/core";
+import { createFileTurnStore, type OpenSession, runProgram, type TurnStore } from "@microfoom/core";
 import { type AgentEvent, buildRunTree } from "@microfoom/core/trace";
-import { createPiOpenSession } from "@microfoom/pi-adapter";
 import { modelFromEnv } from "./env.js";
-import { fakeOpenSession } from "./fake.js";
 import { fmtSummary } from "./format.js";
+import { knownHarnessNames, openHarnessRegistry } from "./harnesses.js";
 import { loadProgram } from "./loader.js";
 import { attachPanel } from "./panel.js";
 import { RERUN_EXIT_CODE } from "./tui/rerun.js";
-
-// Selectable harnesses (composition root — the one place names map to adapters).
-// Add new harness support here; the program then runs on `--harness <name>`.
-const HARNESSES: Record<string, () => OpenSession> = {
-  pi: createPiOpenSession,
-  fake: fakeOpenSession,
-};
-const DEFAULT_HARNESS = "pi";
 
 const HELP = `microfoom — run a microfoom program file
 
@@ -39,7 +30,7 @@ Usage:
   microfoom <file> [input]            'run' is optional
 
 Options:
-  --harness <name>    harness to run on: pi (default) | fake (offline stub, no model)
+  --harness <name>    harness to run on: claudecli | pi | fake (offline stub, no model)
   --omit-harness-prompt   send the model ONLY microfoom's prompt (drop the harness
                       base prompt — pi's coding-agent persona + project context)
   --model <id>        model id (default: $MICROFOOM_MODEL or a deepseek default)
@@ -50,6 +41,10 @@ Options:
                       by skill name). pi only.
   --plugins <a,b>     plugins/extensions to load (default: all installed; "" = none;
                       by source name). pi only.
+  --store <uri>       resume after termination: record completed turns to a store and
+                      recall them on a re-run instead of re-calling the model. A path
+                      or file:// URI is an on-disk JSONL store (created if missing);
+                      run the same command again to resume.
   --input <value>     program input (alternative to the positional)
   --tui               open the interactive two-pane inspector (trace tree + live
                       transcript; mouse + scroll). Runs under bun; stays open when
@@ -118,6 +113,49 @@ function cliDefaults(
   };
 }
 
+/** Assemble the run options, adding optional fields only when set. */
+function buildRunOptions(args: {
+  harnesses: Record<string, OpenSession>;
+  defaultHarness: string | undefined;
+  model: string;
+  sourceFile: string;
+  onEvent: (event: AgentEvent) => void;
+  defaults: ReturnType<typeof cliDefaults>;
+  store: TurnStore | undefined;
+}): Parameters<typeof runProgram>[2] {
+  return {
+    harnesses: args.harnesses,
+    ...(args.defaultHarness === undefined ? {} : { defaultHarness: args.defaultHarness }),
+    model: args.model,
+    sourceFile: args.sourceFile,
+    onEvent: args.onEvent,
+    ...(Object.keys(args.defaults).length > 0 ? { defaults: args.defaults } : {}),
+    ...(args.store === undefined ? {} : { store: args.store }),
+  };
+}
+
+/** A `<scheme>://` prefix in a `--store` URI (anything but `file://` is unsupported). */
+const STORE_URI_SCHEME = /^([a-z][a-z0-9+.-]*):\/\//i;
+
+/** Resolve the `--store <uri>` flag to a TurnStore. A `file://` URI or a bare
+ *  filesystem path is an on-disk JSONL store; any other URI scheme is rejected (no
+ *  backend yet). Undefined when the flag is absent (no store; nothing persisted). */
+function resolveStore(uri: string | undefined): TurnStore | undefined {
+  if (uri === undefined) {
+    return;
+  }
+  if (uri.startsWith("file://")) {
+    return createFileTurnStore(fileURLToPath(uri));
+  }
+  const scheme = STORE_URI_SCHEME.exec(uri);
+  if (scheme !== null) {
+    throw new Error(
+      `unsupported --store scheme "${scheme[1]}://" — use a filesystem path or file:// URI`,
+    );
+  }
+  return createFileTurnStore(isAbsolute(uri) ? uri : resolve(process.cwd(), uri));
+}
+
 /** Locate the TUI entry next to this module: `tui.tsx` in dev (src), `tui.js` built. */
 function resolveTuiEntry(): string | undefined {
   const here = dirname(fileURLToPath(import.meta.url));
@@ -139,6 +177,7 @@ interface TuiArgs {
   readonly tools: string | undefined;
   readonly skills: string | undefined;
   readonly plugins: string | undefined;
+  readonly store: string | undefined;
   readonly systemPrompt: boolean;
   readonly fullUserMsg: boolean;
   readonly omitHarnessPrompt: boolean;
@@ -194,6 +233,9 @@ async function runTui(args: TuiArgs): Promise<number> {
   if (args.plugins !== undefined) {
     argv.push("--plugins", args.plugins);
   }
+  if (args.store !== undefined) {
+    argv.push("--store", args.store);
+  }
   if (args.omitHarnessPrompt) {
     argv.push("--omit-harness-prompt");
   }
@@ -213,21 +255,6 @@ async function runTui(args: TuiArgs): Promise<number> {
       return code;
     }
   }
-}
-
-/** Open a session on the named harness (pi gets the omit-base-prompt option), or
- *  undefined when the name isn't a known harness. */
-function openHarnessSession(
-  harnessName: string,
-  omitHarnessPrompt: boolean,
-): OpenSession | undefined {
-  const makeHarness = HARNESSES[harnessName];
-  if (makeHarness === undefined) {
-    return;
-  }
-  return harnessName === "pi"
-    ? createPiOpenSession({ omitHarnessBasePrompt: omitHarnessPrompt })
-    : makeHarness();
 }
 
 /** Run the program and render its result + run summary; map a thrown failure to a
@@ -268,6 +295,7 @@ const CLI_PARSE_CONFIG = {
     skills: { type: "string" },
     plugins: { type: "string" },
     input: { type: "string" },
+    store: { type: "string" },
     tui: { type: "boolean", default: false },
     "omit-harness-prompt": { type: "boolean", default: false },
     "system-prompt": { type: "boolean", default: false },
@@ -318,6 +346,7 @@ async function run(): Promise<number> {
       tools: values.tools,
       skills: values.skills,
       plugins: values.plugins,
+      store: values.store,
       systemPrompt: values["system-prompt"],
       fullUserMsg: values["full-user-msg"],
       omitHarnessPrompt: values["omit-harness-prompt"],
@@ -329,11 +358,10 @@ async function run(): Promise<number> {
   const usePanel = values.panel || (!values.headless && interactive);
 
   const ProgramClass = await loadProgram(sourceFile);
-  const harnessName = values.harness ?? DEFAULT_HARNESS;
-  const openSession = openHarnessSession(harnessName, values["omit-harness-prompt"]);
-  if (openSession === undefined) {
+  const harnesses = openHarnessRegistry(values.harness, values["omit-harness-prompt"]);
+  if (harnesses === undefined) {
     process.stderr.write(
-      `microfoom: unknown harness "${harnessName}" (known: ${Object.keys(HARNESSES).join(", ")})\n`,
+      `microfoom: unknown harness "${values.harness}" (known: ${knownHarnessNames().join(", ")})\n`,
     );
     return 1;
   }
@@ -351,16 +379,19 @@ async function run(): Promise<number> {
     parseList(values.skills),
     parseList(values.plugins),
   );
+  const store = resolveStore(values.store);
   return executeProgram(
     ProgramClass,
     input,
-    {
-      harnesses: { [harnessName]: openSession },
+    buildRunOptions({
+      harnesses,
+      defaultHarness: values.harness,
       model,
       sourceFile,
       onEvent,
-      ...(Object.keys(defaults).length > 0 ? { defaults } : {}),
-    },
+      defaults,
+      store,
+    }),
     values,
     events,
     panel,

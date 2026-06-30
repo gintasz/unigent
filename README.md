@@ -128,6 +128,15 @@ import "@microfoom/core/trace";
 The CLI's run panel and `--tui` inspector render exactly this tree.
 
 
+## Resuming work
+
+A long run can be **killed and restarted without losing finished work**. Pass a store (`--store` on the CLI, or the `store` run option) and every completed turn is recorded by a content hash of its inputs; on a re-run, an unchanged turn is recalled from the store instead of re-invoking the model — you pay only for turns that haven't run yet.
+
+- **`storeKey`** — ``.with({ storeKey: `draft-${i}` })`` forces an otherwise-identical turn to its own record, so best-of-N sampling of one prompt keeps N distinct results instead of collapsing to one.
+- **`store: false`** — `.with({ store: false })` opts a turn out: always run fresh, never recalled.
+
+Turns inside a stateful `session()` are not memoized — their shared transcript can't be reconstructed on recall.
+
 ## How the agent talks to your program
 
 An agent running inside a microfoom runtime interacts with it through 4 native tools — surfaced as structured function calls.
@@ -182,6 +191,7 @@ The CLI runs a program file with zero boilerplate — model/auth resolved from t
 microfoom run ./researcher.ts "tides"
 microfoom run ./researcher.ts "tides" --json        # result as JSON
 microfoom run ./researcher.ts "tides" --harness fake # offline, deterministic, no model
+microfoom run ./researcher.ts "tides" --store ./.microfoom/tides.jsonl  # store agent turn outcomes, re-run the same command to resume
 ```
 
 Add `--tui` to open a two-pane inspector: the live span tree on the left, the agent's transcript for the selected span on the right.
@@ -200,7 +210,7 @@ microfoom run ./researcher.ts --tui
 You can also run it programmatically.
 
 ```ts
-import { runProgram } from "@microfoom/core";
+import { createFileTurnStore, runProgram } from "@microfoom/core";
 import { createPiOpenSession } from "@microfoom/pi-adapter";
 import { createClaudeCliOpenSession } from "@microfoom/claudecli-adapter";
 
@@ -212,6 +222,7 @@ const report = await runProgram(MyProgram, { topic: "tides" }, {
   defaultHarness: "pi",
   model: "openrouter/deepseek/deepseek-v4-flash",
   sourceFile: "./my-program.ts", // required for foom_call parameter derivation
+  store: createFileTurnStore("./.microfoom/tides.jsonl"), // omit → nothing persisted
 });
 ```
 

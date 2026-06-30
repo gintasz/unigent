@@ -10,7 +10,7 @@ Run development server:
 ```bash
 npm run dev
 # or
-pnpm dev
+corepack pnpm dev
 # or
 yarn dev
 ```

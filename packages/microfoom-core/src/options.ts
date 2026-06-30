@@ -25,8 +25,29 @@ export interface AgentTurnMeta {
   label?: string;
 }
 
+/**
+ * Per-call turn-store controls (resume after termination). Apply only when a store
+ * is configured on the run (`runProgram({ store })` / CLI `--store`); inert otherwise.
+ */
+export interface AgentStoreOptions {
+  /**
+   * Force this turn to a distinct store record. Two turns with the same prompt and
+   * config hash to the same key and collapse to one stored result; set a different
+   * `storeKey` on each (e.g. `"draft-0"`, `"draft-1"`) to keep deliberately-identical
+   * turns — best-of-N sampling — as independent records.
+   */
+  storeKey?: string;
+  /** Set to `false` to never store or recall this turn — always run it fresh, even
+   *  on resume (for turns you want non-deterministic by design). */
+  store?: false;
+}
+
 /** Everything accepted at a call/scope: cascading config plus per-call extras. */
-export type AgentOptions = AgentConfig & AgentRunHooks & AgentCancellation & AgentTurnMeta;
+export type AgentOptions = AgentConfig &
+  AgentRunHooks &
+  AgentCancellation &
+  AgentTurnMeta &
+  AgentStoreOptions;
 
 /** Structured tool advertisement — the value of `@foom.expose({ tool })`. */
 export interface AgentToolOptions {

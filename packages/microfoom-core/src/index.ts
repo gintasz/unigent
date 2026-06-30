@@ -57,6 +57,7 @@ export type {
   AgentExposeOptions,
   AgentOptions,
   AgentRunHooks,
+  AgentStoreOptions,
   AgentToolOptions,
   AgentTurnMeta,
   LLMToken,
@@ -95,6 +96,11 @@ export type {
 } from "./session.js";
 // Standard Schema helper (build a validator without committing to a vendor)
 export { makeStandardSchema } from "./standard_schema.js";
+// Turn-result store (resume after termination)
+export type { TurnRecord, TurnStore } from "./store.js";
+export { createFileTurnStore, createMemoryTurnStore } from "./store.js";
+// A turn's settled outcome (the value carried in a TurnRecord)
+export type { TurnOutcome } from "./tools.js";
 
 // Usage
 export type { AgentUsage } from "./usage.js";

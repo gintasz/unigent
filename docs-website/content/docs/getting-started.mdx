@@ -9,12 +9,14 @@ microfoom is a TypeScript library. You need Node.js 24+ and a Standard Schema
 validator (zod 3.24+, valibot, arktype — any works).
 
 ```sh
-pnpm add @microfoom/core @microfoom/pi-adapter zod
+pnpm add @microfoom/core @microfoom/pi-adapter @microfoom/claudecli-adapter zod
+pnpm add -g @microfoom/cli
 ```
 
-`@microfoom/core` is the harness-agnostic runtime. `@microfoom/pi-adapter` binds
-it to the [pi](https://github.com/earendil-works/pi) harness, which supplies the
-model loop, auth, and tools from your `~/.pi` config.
+`@microfoom/core` is the harness-agnostic runtime. The adapter packages bind it
+to concrete model loops: `pi` resolves model/auth/tools from your `~/.pi` config,
+and `claudecli` drives the logged-in Claude Code CLI. The CLI bundles `pi`,
+`claudecli`, and the offline `fake` harness.
 
 ## Write a program
 
@@ -46,7 +48,7 @@ The CLI runs a program file and prints the result to stdout (trace goes to
 stderr):
 
 ```sh
-microfoom run ./my-program.ts '{"topic":"tides"}'
+microfoom run ./my-program.ts '{"topic":"tides"}' --harness pi
 ```
 
 ### Programmatically

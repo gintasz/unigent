@@ -4,9 +4,9 @@
   "private": true,
   "scripts": {
     "gen:api": "typedoc && node scripts/api-meta.mjs",
-    "predev": "pnpm run gen:api",
+    "predev": "corepack pnpm run gen:api",
     "dev": "next dev",
-    "prebuild": "pnpm run gen:api",
+    "prebuild": "corepack pnpm run gen:api",
     "build": "next build",
     "start": "serve out",
     "types:check": "fumadocs-mdx && next typegen && tsc --noEmit",

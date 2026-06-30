@@ -6,6 +6,7 @@
 // public taxonomy (F7). Plain Promise/async throughout; no effect-system layer.
 
 import { AsyncLocalStorage } from "node:async_hooks";
+import { createHash } from "node:crypto";
 import type { StandardSchemaV1 } from "@standard-schema/spec";
 import { ConcurrencyGate, type ConcurrencyLease } from "./concurrency.js";
 import { type AgentConfig, durationToMs, mergeConfigChain } from "./config.js";
@@ -24,6 +25,8 @@ import { type ExposeMeta, exposedMethods, readClassMeta } from "./registry.js";
 import { type AgentResult, type AgentTextStream, makeResult, makeTextStream } from "./result.js";
 import { type DerivedParameters, deriveMethodParameters } from "./schema_derive.js";
 import type { HarnessSession, HarnessSessionOptions, OpenSession } from "./session.js";
+import { standardInputJsonSchema } from "./standard_schema.js";
+import type { TurnStore } from "./store.js";
 import {
   type ProgramTurnContext,
   type ResolvedCaps,
@@ -209,6 +212,13 @@ interface RunProgramOptions {
    * cost on the common path).
    */
   readonly onEvent?: (event: AgentEvent) => void;
+  /**
+   * Turn-result store for resume after termination: completed stateless turns are
+   * recorded by a content hash of their inputs and recalled on a later run instead
+   * of re-invoking the model. Omit to disable (nothing is persisted; the default).
+   * Use {@link createFileTurnStore} for durable on-disk resume.
+   */
+  readonly store?: TurnStore;
 }
 
 // Delimiters that mark runtime-injected text (not the dev's task input). The whole
@@ -237,8 +247,16 @@ const DO_TURN_NOTICE = noticeBlock(
 );
 
 function pickConfig(options: AgentOptions): AgentConfig {
-  // Strip the runtime-only fields (onToken, signal, label); the rest is config.
-  const { onToken: _onToken, signal: _signal, label: _label, ...config } = options;
+  // Strip the runtime-only fields (hooks, cancellation, label, store controls); the
+  // rest is the inheritable config cascade.
+  const {
+    onToken: _onToken,
+    signal: _signal,
+    label: _label,
+    storeKey: _storeKey,
+    store: _store,
+    ...config
+  } = options;
   return config;
 }
 
@@ -287,6 +305,8 @@ interface Runtime {
    *  turn's signal so an external abort cancels the whole run. */
   readonly signal?: AbortSignal;
   readonly concurrency: ConcurrencyGate;
+  /** Turn-result store for resume-after-termination; undefined → turns never stored. */
+  readonly store?: TurnStore;
 }
 
 function emitAll(runtime: Runtime, event: AgentEvent): void {
@@ -705,6 +725,106 @@ interface DriveDeps {
   readonly frozen: FrozenIdentity | undefined;
 }
 
+/**
+ * Content hash identifying a turn for the store: everything that determines what
+ * the model produces — mode (+ a value turn's JSON schema when derivable), the
+ * rendered prompt, the composed system prompt, model, harness, thinking, allowed
+ * tools, base-prompt omission, the output-token cap — plus an optional `storeKey`
+ * salt to force distinct records for deliberately-identical turns. Position is NOT
+ * included: a turn recalls its result wherever it sits in main(). Excluded: usage,
+ * timestamps, and abort-only caps (budget/duration), which don't shape the output.
+ */
+function turnFingerprint(
+  prepared: Prepared,
+  mode: TurnMode,
+  prompt: string,
+  harness: string,
+  storeKey: string | undefined,
+): string {
+  const ingredients = {
+    mode: mode.kind,
+    schema: mode.kind === "value" ? (standardInputJsonSchema(mode.schema) ?? null) : null,
+    prompt,
+    systemPrompt: prepared.systemPrompt,
+    model: prepared.model,
+    harness,
+    thinking: prepared.thinking ?? null,
+    tools: prepared.tools ?? null,
+    omitBasePrompt: prepared.omitBasePrompt ?? null,
+    maxOutputTokens: prepared.caps.maxOutputTokens ?? null,
+    storeKey: storeKey ?? null,
+  };
+  return createHash("sha256").update(JSON.stringify(ingredients)).digest("hex");
+}
+
+/** Rebuild the internal usage account from a recalled turn's stored projection, so a
+ *  recalled turn folds the same usage a freshly-run turn would (a resumed run totals
+ *  what a clean run totals). Absent optional fields stay undefined ("not reported"). */
+function agentUsageToAccount(usage: AgentUsage): UsageAccount {
+  return {
+    inputTokens: usage.inputTokens,
+    outputTokens: usage.outputTokens,
+    totalTokens: usage.totalTokens,
+    reasoningTokens: usage.reasoningTokens,
+    cachedInputTokens: usage.cachedInputTokens,
+    costUsd: usage.costUsd,
+    calls: usage.calls,
+    maxCallDepth: usage.maxCallDepth,
+  };
+}
+
+/** The store this turn uses, or undefined to bypass: no store configured, the turn
+ *  opted out (`store: false`), or it belongs to a stateful session (frozen identity)
+ *  whose shared transcript can't be reconstructed on recall. */
+function turnStore(deps: DriveDeps): TurnStore | undefined {
+  if (
+    deps.runtime.store === undefined ||
+    deps.options.store === false ||
+    deps.frozen !== undefined
+  ) {
+    return;
+  }
+  return deps.runtime.store;
+}
+
+/** The store and this turn's content hash, paired — present only when the turn is
+ *  storable (see {@link turnStore}). Built once so recall and record agree on both. */
+interface TurnStoreCtx {
+  readonly store: TurnStore;
+  readonly hash: string;
+}
+
+/** Resolve the store context for a turn, or undefined when it isn't storable. */
+function turnStoreCtx(
+  deps: DriveDeps,
+  prepared: Prepared,
+  mode: TurnMode,
+  prompt: string,
+): TurnStoreCtx | undefined {
+  const store = turnStore(deps);
+  if (store === undefined) {
+    return;
+  }
+  const harness = optionsHarness(deps.runtime, deps.options);
+  return { store, hash: turnFingerprint(prepared, mode, prompt, harness, deps.options.storeKey) };
+}
+
+/** A recalled turn: its stored outcome and the usage account to re-fold, or undefined
+ *  on a miss. Folds the recalled usage into the run total so a resumed run accounts
+ *  for the same work a clean run did. */
+function recallTurn(
+  ctx: TurnStoreCtx,
+  runtime: Runtime,
+): { readonly outcome: TurnOutcome; readonly account: UsageAccount } | undefined {
+  const hit = ctx.store.get(ctx.hash);
+  if (hit === undefined) {
+    return;
+  }
+  const account = agentUsageToAccount(hit.usage);
+  runtime.usage = combineUsage(runtime.usage, account);
+  return { outcome: hit.outcome, account };
+}
+
 /** Run one turn: open the session, emit the span, fold usage, settle the guard. */
 async function driveTurn(
   deps: DriveDeps,
@@ -723,6 +843,8 @@ async function driveTurn(
     startedAt = 0;
   try {
     const prepared = prepare(runtime, options, frozen);
+    // Resolve the store + content hash up front: a hit short-circuits the model.
+    const storeCtx = turnStoreCtx(deps, prepared, mode, prompt);
     capacityLease = await runtime.concurrency.acquire(prepared.maxConcurrentTurns, signal);
     span = runtime.nextSpan();
     traced = runtime.listeners.size > 0;
@@ -735,18 +857,26 @@ async function driveTurn(
     if (signal.aborted) {
       throw new FoomCancelledError("the agent run was aborted");
     }
+    // Recall a previously-completed turn: return its stored outcome without opening a
+    // session or invoking the model. Runs live within a run too, so identical turns
+    // (same hash) collapse and a crashed run and a clean run compute the same result.
+    const recalled = storeCtx === undefined ? undefined : recallTurn(storeCtx, runtime);
+    if (recalled !== undefined) {
+      turnDelta = recalled.account;
+      return recalled.outcome;
+    }
     const session = await source.get();
     emitTurnMeta(runtime, traced, span, session, prepared.systemPrompt);
     const fold = (delta: UsageAccount): UsageAccount => {
-      if (traced) {
-        turnDelta = combineUsage(turnDelta, delta);
-      }
+      turnDelta = combineUsage(turnDelta, delta);
       runtime.usage = combineUsage(runtime.usage, delta);
       return runtime.usage;
     };
+    // Run the turn body under this span so a method the agent foom_calls
+    // mid-turn (and its own turns) nest beneath it.
     const activeSpan = span;
     const activeCapacityLease = capacityLease;
-    return await runtime.spanALS.run(activeSpan, async () =>
+    const outcome = await runtime.spanALS.run(activeSpan, async () =>
       runProgramTurn(
         buildRunTurnParams({
           session,
@@ -764,6 +894,11 @@ async function driveTurn(
         }),
       ),
     );
+    // Record the completed turn for resume (only after it settled successfully).
+    if (storeCtx !== undefined) {
+      await storeCtx.store.set(storeCtx.hash, { outcome, usage: toAgentUsage(turnDelta) });
+    }
+    return outcome;
   } catch (error) {
     if (error instanceof FoomCancelledError) {
       throw error;
@@ -1205,6 +1340,7 @@ async function runProgram<P extends FoomProgram<never, unknown>>(
     methodConfig: undefined,
     spanALS: new AsyncLocalStorage<string | undefined>(),
     concurrency: new ConcurrencyGate(),
+    ...(options.store === undefined ? {} : { store: options.store }),
   };
 
   // Wire an external subscriber (CLI/harness renderer) before main() runs, so the

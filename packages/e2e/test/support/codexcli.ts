@@ -134,7 +134,7 @@ function scriptedFactory(steps: readonly ScriptStep[]): CodexProcessFactory {
 
 /** The codexcli harness adapter, driven live and scripted. */
 export function codexcliE2EAdapter(): E2EAdapter {
-  const liveModel = process.env["MICROFOOM_CODEXCLI_MODEL"] ?? "gpt-5-codex";
+  const liveModel = process.env["MICROFOOM_CODEXCLI_MODEL"] ?? "gpt-5.4-mini";
   return {
     name: "codexcli",
     live: {

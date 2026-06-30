@@ -133,7 +133,7 @@ export interface AgentExposeOptions {
 export type AgentMethodDecorator = <This, Args extends readonly unknown[], Return>(value: (this: This, ...args: Args) => Return, context: ClassMethodDecoratorContext<This, (this: This, ...args: Args) => Return>) => ((this: This, ...args: Args) => Return) | undefined;
 
 // @public
-export type AgentOptions = AgentConfig & AgentRunHooks & AgentCancellation & AgentTurnMeta;
+export type AgentOptions = AgentConfig & AgentRunHooks & AgentCancellation & AgentTurnMeta & AgentStoreOptions;
 
 // @public
 export interface AgentProgramContext<TProgram extends object> extends AgentRun {
@@ -179,6 +179,12 @@ export interface AgentSession extends AgentRun {
     readonly usage: AgentUsage;
     // (undocumented)
     with: (options: AgentOptions) => AgentSession;
+}
+
+// @public
+export interface AgentStoreOptions {
+    store?: false;
+    storeKey?: string;
 }
 
 // @public
@@ -242,6 +248,12 @@ export type ControlToolName = (typeof CONTROL_TOOLS)[keyof typeof CONTROL_TOOLS]
 
 // @public
 export const CORE_VERSION = "0.1.0";
+
+// @public
+export function createFileTurnStore(filePath: string): TurnStore;
+
+// @public
+export function createMemoryTurnStore(): TurnStore;
 
 // @public
 export interface DerivedParameters {
@@ -443,6 +455,7 @@ export interface RunProgramOptions {
     // (undocumented)
     readonly signal?: AbortSignal;
     readonly sourceFile?: string;
+    readonly store?: TurnStore;
 }
 
 // @public
@@ -510,6 +523,31 @@ export interface ToolExecResult {
     readonly content: string;
     readonly isError: boolean;
     readonly terminate?: boolean;
+}
+
+// @public
+export type TurnOutcome = {
+    readonly kind: "text";
+    readonly text: string;
+} | {
+    readonly kind: "value";
+    readonly value: unknown;
+} | {
+    readonly kind: "do";
+};
+
+// @public
+export interface TurnRecord {
+    // (undocumented)
+    readonly outcome: TurnOutcome;
+    // (undocumented)
+    readonly usage: AgentUsage;
+}
+
+// @public
+export interface TurnStore {
+    get: (hash: string) => TurnRecord | undefined;
+    set: (hash: string, record: TurnRecord) => void | Promise<void>;
 }
 
 // @public

@@ -137,6 +137,9 @@ importers:
 
   packages/microfoom-cli:
     dependencies:
+      '@microfoom/claudecli-adapter':
+        specifier: workspace:*
+        version: link:../claudecli-adapter
       '@microfoom/core':
         specifier: workspace:*
         version: link:../microfoom-core

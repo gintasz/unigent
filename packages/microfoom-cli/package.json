@@ -46,6 +46,7 @@
     "api:check": "api-extractor run --verbose"
   },
   "dependencies": {
+    "@microfoom/claudecli-adapter": "workspace:*",
     "@microfoom/core": "workspace:*",
     "@microfoom/pi-adapter": "workspace:*",
     "@opentui/core": "0.4.2",

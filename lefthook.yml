@@ -5,26 +5,26 @@ pre-commit:
   commands:
     format:
       glob: "*.{ts,js,json}"
-      run: pnpm exec biome check --write --error-on-warnings --no-errors-on-unmatched {staged_files}
+      run: corepack pnpm exec biome check --write --error-on-warnings --no-errors-on-unmatched {staged_files}
       stage_fixed: true
     typecheck:
-      run: pnpm run typecheck
+      run: corepack pnpm run typecheck
     lint:types:
-      run: pnpm run lint:types
+      run: corepack pnpm run lint:types
     # Whole-repo (like typecheck/lint:types above) and via the same `spell` script
     # `check` runs — so the hook and `check` cover an identical file set and cannot
     # drift. cspell over the repo is ~2s; staged-only is not worth a divergence risk.
     spell:
-      run: pnpm run spell
+      run: corepack pnpm run spell
 
 pre-push:
   parallel: false
   commands:
     arch:
-      run: pnpm run arch
+      run: corepack pnpm run arch
     deps:
-      run: pnpm run deps:check
+      run: corepack pnpm run deps:check
     dead:
-      run: pnpm run dead
+      run: corepack pnpm run dead
     test:
-      run: pnpm run test
+      run: corepack pnpm run test
