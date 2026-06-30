@@ -39,13 +39,16 @@ describe("buildSessionControls (config → opencode controls)", () => {
 });
 
 describe("config reaches the opencode child (offline)", () => {
-  function capturingHarness(): {
+  function capturingHarness(opts: { omitHarnessBasePrompt?: boolean } = {}): {
     openSession: ReturnType<typeof createOpenCodeOpenSession>;
     seen: () => OpenCodeConfig | undefined;
+    seenArgs: () => { system: string; omitBase: boolean } | undefined;
   } {
     let captured: OpenCodeConfig | undefined;
-    const factory: OpenCodeBackendFactory = ({ config }) => {
+    let capturedArgs: { system: string; omitBase: boolean } | undefined;
+    const factory: OpenCodeBackendFactory = ({ config, system, omitBase }) => {
       captured = config;
+      capturedArgs = { system, omitBase };
       const backend: OpenCodeBackend = {
         createSession: async () => "s",
         forkSession: async () => "s-fork",
@@ -70,8 +73,14 @@ describe("config reaches the opencode child (offline)", () => {
       return Promise.resolve(backend);
     };
     return {
-      openSession: createOpenCodeOpenSession({ backendFactory: factory }),
+      openSession: createOpenCodeOpenSession({
+        backendFactory: factory,
+        ...(opts.omitHarnessBasePrompt === undefined
+          ? {}
+          : { omitHarnessBasePrompt: opts.omitHarnessBasePrompt }),
+      }),
       seen: () => captured,
+      seenArgs: () => capturedArgs,
     };
   }
 
@@ -81,14 +90,16 @@ describe("config reaches the opencode child (offline)", () => {
     }
   }
 
-  it("a plugins allow-list arrives as the plugin array in the config", async () => {
+  it("session plugins follow the shipped system-transform plugin in the config", async () => {
     const { openSession, seen } = capturingHarness();
     await runProgram(Echo, "x", {
       harnesses: { opencode: openSession },
       model: "openrouter/x/y",
       defaults: { tools: [], plugins: ["@scope/a"] },
     });
-    expect(seen()?.["plugin"]).toEqual(["@scope/a"]);
+    const plugins = seen()?.["plugin"] as readonly string[];
+    expect(plugins.at(-1)).toBe("@scope/a");
+    expect(plugins.some((p) => p.includes("system-transform"))).toBe(true);
   });
 
   it("the hermetic baseline disables the skill tool and sharing", async () => {
@@ -139,5 +150,26 @@ describe("config reaches the opencode child (offline)", () => {
       defaults: { tools: [] },
     });
     expect(seen()?.["provider"]).toBeUndefined();
+  });
+
+  it("the turn's system prompt + base-prompt mode reach the backend (hermetic by default)", async () => {
+    const { openSession, seenArgs } = capturingHarness();
+    await runProgram(Echo, "x", {
+      harnesses: { opencode: openSession },
+      model: "openrouter/x/y",
+      defaults: { tools: [] },
+    });
+    expect(seenArgs()?.omitBase).toBe(true);
+    expect(seenArgs()?.system.length ?? 0).toBeGreaterThan(0);
+  });
+
+  it("omitHarnessBasePrompt:false flips the default to append (keep OpenCode's base)", async () => {
+    const { openSession, seenArgs } = capturingHarness({ omitHarnessBasePrompt: false });
+    await runProgram(Echo, "x", {
+      harnesses: { opencode: openSession },
+      model: "openrouter/x/y",
+      defaults: { tools: [] },
+    });
+    expect(seenArgs()?.omitBase).toBe(false);
   });
 });

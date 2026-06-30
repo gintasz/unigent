@@ -16,6 +16,7 @@
 // the FOOM tools are served by an in-process MCP server (mcp.ts) so each tool's
 // `execute` is the real core closure over the live program.
 
+import { fileURLToPath } from "node:url";
 import { startMcpServer, toolDescription } from "@microfoom/adapter-base";
 import {
   FoomHarnessRejectedError,
@@ -43,6 +44,12 @@ const OPENCODE_VERSION = "0.1.0";
 
 /** Default MCP server name → tool prefix `foom_`. */
 const DEFAULT_SERVER_NAME = "foom";
+
+/** The shipped `experimental.chat.system.transform` plugin, loaded into every child
+ *  to make the system prompt an exact replace (hermetic) or opt-in append — OpenCode
+ *  otherwise appends our prompt onto its base persona + ambient AGENTS.md/skills.
+ *  Resolved relative to this module (../plugin/ ships alongside dist/). */
+const SYSTEM_PLUGIN_PATH = fileURLToPath(new URL("../plugin/system-transform.js", import.meta.url));
 
 /** OpenCode's built-in tool names. A per-turn `allowedTools: []` disables every one
  *  of these (so a bare session cannot touch the machine); a list enables only the
@@ -73,10 +80,17 @@ interface OpenCodeSessionOptions {
   readonly backendFactory?: OpenCodeBackendFactory;
   /** MCP server name; changes the tool prefix. Default `foom`. */
   readonly serverName?: string;
+  /**
+   * Construction default for dropping OpenCode's base prompt (its coding persona +
+   * ambient AGENTS.md/CLAUDE.md). Default true: send ONLY microfoom's prompt, for a
+   * controlled, hermetic session. A per-turn `omitBasePrompt` overrides this.
+   */
+  readonly omitHarnessBasePrompt?: boolean;
 }
 
-/** The system prompt this session sends for a program prompt. OpenCode's `system`
- *  field REPLACES its base prompt, so the program prompt is sent verbatim. */
+/** The system prompt this session sends for a program prompt — the program prompt
+ *  verbatim. The shipped transform plugin then makes it a hermetic replace (or an
+ *  opt-in append) of OpenCode's base, per the turn's omitBasePrompt. */
 function composeSystemPrompt(programPrompt: string): string {
   return programPrompt;
 }
@@ -197,7 +211,8 @@ function buildConfig(
     },
     share: "disabled",
     autoupdate: false,
-    ...(controls.plugins === undefined ? {} : { plugin: [...controls.plugins] }),
+    // The system-transform plugin always loads; session plugins follow it.
+    plugin: [SYSTEM_PLUGIN_PATH, ...(controls.plugins ?? [])],
     ...reasoningConfig(model, thinking),
   };
 }
@@ -210,6 +225,7 @@ function buildConfig(
 function createOpenCodeOpenSession(options: OpenCodeSessionOptions = {}): OpenSession {
   const factory = options.backendFactory ?? spawnOpenCodeBackend;
   const serverName = options.serverName ?? DEFAULT_SERVER_NAME;
+  const omitBaseDefault = options.omitHarnessBasePrompt ?? true;
 
   return ({ model: modelId, skills, plugins }: HarnessSessionOptions): HarnessSession => {
     if (modelId.trim() === "") {
@@ -232,12 +248,12 @@ function createOpenCodeOpenSession(options: OpenCodeSessionOptions = {}): OpenSe
           makeDescribe(names, serverName),
         );
         const config = buildConfig(mcp.url, serverName, controls, model, request.thinking);
-        const backend = await factory({ config });
+        const omitBase = request.omitBasePrompt ?? omitBaseDefault;
+        const backend = await factory({ config, system: systemPrompt, omitBase });
         try {
           currentSessionId = await resolveSessionId(backend, currentSessionId, seedSessionId);
           const spec: PromptSpec = {
             model,
-            system: systemPrompt,
             prompt,
             tools: buildTurnTools(request.allowedTools),
             serverName,

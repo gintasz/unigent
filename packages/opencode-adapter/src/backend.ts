@@ -11,6 +11,7 @@
 // (clean lifecycle, fresh MCP tool listing) yet threads one conversation by id.
 
 import { type AddressInfo, createServer } from "node:net";
+import process from "node:process";
 import { FoomHarnessRejectedError, type StreamEvent } from "@microfoom/core";
 import { createOpencodeClient, createOpencodeServer } from "@opencode-ai/sdk";
 import {
@@ -23,12 +24,13 @@ import {
 /** The OpenCode config object injected into the child via `OPENCODE_CONFIG_CONTENT`. */
 type OpenCodeConfig = Record<string, unknown>;
 
-/** Everything one prompt needs. Harness-neutral; SDK shapes are built in the backend. */
+/** Everything one prompt needs. Harness-neutral; SDK shapes are built in the backend.
+ *  The system prompt is NOT here — it travels via the backend launcher's `system`
+ *  arg to the shipped transform plugin, since OpenCode otherwise appends it onto its
+ *  ambient base. */
 interface PromptSpec {
   /** `provider/model` split into OpenCode's two-part model selector. */
   readonly model: { readonly providerID: string; readonly modelID: string };
-  /** The full system prompt for this turn (replaces OpenCode's default). */
-  readonly system: string;
   /** The user prompt text. */
   readonly prompt: string;
   /** Per-turn tool gate (OpenCode's own built-ins): `name → enabled`. FOOM tools
@@ -58,10 +60,18 @@ interface OpenCodeBackend {
   close: () => Promise<void>;
 }
 
-/** Injected per-turn backend launcher. */
-type OpenCodeBackendFactory = (args: {
+/** What the per-turn backend launcher needs: the child's config, plus this turn's
+ *  system prompt + base-prompt mode (delivered to the shipped transform plugin). */
+interface BackendArgs {
   readonly config: OpenCodeConfig;
-}) => Promise<OpenCodeBackend>;
+  /** The full system prompt for this turn. */
+  readonly system: string;
+  /** true → replace OpenCode's base prompt (hermetic); false → append onto it. */
+  readonly omitBase: boolean;
+}
+
+/** Injected per-turn backend launcher. */
+type OpenCodeBackendFactory = (args: BackendArgs) => Promise<OpenCodeBackend>;
 
 /** Split a `provider/model` id into OpenCode's `{ providerID, modelID }`. The model
  *  half may itself contain slashes (e.g. `openrouter/deepseek/deepseek-v4-flash`). */
@@ -174,7 +184,6 @@ async function runPrompt(
       path: { id: sessionId },
       body: {
         model: spec.model,
-        system: spec.system,
         ...(spec.tools === undefined ? {} : { tools: spec.tools }),
         parts: [{ type: "text", text: spec.prompt }],
       },
@@ -206,10 +215,15 @@ async function runPrompt(
  * a client to it. Models resolve through OpenCode itself; auth comes from the
  * user's logged-in providers.
  */
-async function spawnOpenCodeBackend(args: {
-  readonly config: OpenCodeConfig;
-}): Promise<OpenCodeBackend> {
+async function spawnOpenCodeBackend(args: BackendArgs): Promise<OpenCodeBackend> {
   const port = await freePort();
+  // Hand this turn's system prompt to the shipped transform plugin via an env var
+  // keyed by the child's port (OpenCode rejects unknown config keys; the keyed name
+  // avoids races with concurrent servers). Set immediately before the synchronous
+  // `launch` inside createOpencodeServer so the child inherits it.
+  const envKey = `OPENCODE_FOOM_${port}`;
+  // biome-ignore lint/style/noProcessEnv: a per-server channel to the child's plugin — the value must land in the spawned process's environment, which is exactly process.env.
+  process.env[envKey] = JSON.stringify({ system: args.system, omitBase: args.omitBase });
   const server = await createOpencodeServer({
     hostname: "127.0.0.1",
     port,
@@ -228,6 +242,8 @@ async function spawnOpenCodeBackend(args: {
       runPrompt(client, sessionId, spec),
     // eslint-disable-next-line @typescript-eslint/promise-function-async -- server.close() is synchronous; we only adapt it to the async close() contract.
     close: (): Promise<void> => {
+      // biome-ignore lint/style/noProcessEnv: clears the per-server channel set above; same rationale.
+      delete process.env[envKey];
       server.close();
       return Promise.resolve();
     },

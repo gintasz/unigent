@@ -24,10 +24,10 @@ export interface OpenCodeBackend {
     prompt: (sessionId: string, spec: PromptSpec) => Promise<TurnOutcome>;
 }
 
+// Warning: (ae-forgotten-export) The symbol "BackendArgs" needs to be exported by the entry point index.d.ts
+//
 // @public
-export type OpenCodeBackendFactory = (args: {
-    readonly config: OpenCodeConfig;
-}) => Promise<OpenCodeBackend>;
+export type OpenCodeBackendFactory = (args: BackendArgs) => Promise<OpenCodeBackend>;
 
 // @public
 export type OpenCodeConfig = Record<string, unknown>;
@@ -35,6 +35,7 @@ export type OpenCodeConfig = Record<string, unknown>;
 // @public
 export interface OpenCodeSessionOptions {
     readonly backendFactory?: OpenCodeBackendFactory;
+    readonly omitHarnessBasePrompt?: boolean;
     readonly serverName?: string;
 }
 
@@ -50,7 +51,6 @@ export interface PromptSpec {
     readonly serverName: string;
     // (undocumented)
     readonly signal?: AbortSignal | undefined;
-    readonly system: string;
     readonly tools?: Record<string, boolean> | undefined;
 }
 
