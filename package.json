@@ -61,7 +61,7 @@
     "unlink": "cd packages/microfoom-cli && corepack pnpm unlink --global",
     "check": "turbo run //#typecheck //#format:check //#lint //#lint:types //#ast --continue --output-logs=errors-only --log-order=grouped --log-prefix=none",
     "check:full": "turbo run //#build //#typecheck //#format:check //#lint //#lint:types //#arch //#ast //#spell //#deps:check //#audit //#dead //#dup //#docs:check //#coverage api:check --continue --output-logs=errors-only --log-order=grouped --log-prefix=none",
-    "prepare": "node scripts/install-hooks.mjs"
+    "prepare": "lefthook install"
   },
   "devDependencies": {
     "@ast-grep/cli": "0.44.0",
