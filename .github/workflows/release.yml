@@ -41,9 +41,14 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - run: pnpm run build
-
-      - run: pnpm run test
+      # Clean-room gate only when this push actually publishes (the version-PR
+      # merge, message "chore: version packages"). ci.yml no longer runs on main
+      # pushes, so this is the release-context verification; ordinary pushes just
+      # refresh the version PR and skip build/test.
+      # Quoted like the `publish:` line below: the embedded ": " in
+      # 'chore: version packages' would otherwise parse as a YAML mapping.
+      - if: "${{ contains(github.event.head_commit.message, 'chore: version packages') }}"
+        run: pnpm run build && pnpm run test
 
       # Publish is gated on two conditions; either being false leaves the
       # `publish` input empty, so the action only opens/updates the version PR

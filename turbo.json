@@ -14,7 +14,7 @@
     "//#dead": { "cache": false },
     "//#dup": { "cache": false },
     "//#docs:check": { "cache": false },
-    "//#coverage": { "cache": false },
+    "//#coverage": { "cache": false, "dependsOn": ["//#build"] },
     "//#build": { "outputs": ["packages/*/dist/**"] },
     "api": { "dependsOn": ["//#build"] },
     "api:check": { "dependsOn": ["//#build"] }

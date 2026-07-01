@@ -57,8 +57,8 @@ not an edit to the governing principles.
   (`unplugin-swc`) because the default Vite transform (oxc) does not lower the
   TC39 decorators that `@foom.config`/`@foom.expose` use.
 - **Hygiene:** syncpack (one version per dep, exact), knip (dead code), jscpd
-  (duplication), typos (spell — CI-pinned `crate-ci/typos` action; local dev-provided),
-  lefthook (DoD gate, git hooks).
+  (duplication), typos (spell — CI installs pinned binary via taiki-e/install-action;
+  local dev-provided), lefthook (DoD gate, git hooks).
 - Package **directory** names are kebab-case (ecosystem norm); **source files**
   are snake_case (N1), enforced by biome's filename rule scoped to `packages/*/src`.
 
@@ -79,7 +79,7 @@ not an edit to the governing principles.
 | dead-code checker | knip | B2 |
 | duplication detector | jscpd | B9 |
 | version-policy checker | syncpack | DEP3 |
-| spell checker | typos — `crate-ci/typos@v1.48.0` in CI (pinned); local install developer-provided, not lockfile-pinned (L1 pinning exception: no npm distribution) | N5 |
+| spell checker | typos — CI installs the pinned binary via `taiki-e/install-action` (version pinned in `ci.yml`) and runs it through `check:full`; local install developer-provided, not lockfile-pinned (L1 pinning exception: no npm distribution) | N5 |
 | git-hook runner | lefthook | V1, DOD |
 | usage-accounting monoid | hand-written `combineUsage`/`emptyUsage` (core) | OB3 |
 | event renderer | core `formatEvent`/`consoleExporter` (`@microfoom/core/trace`) | OB1 |
