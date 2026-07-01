@@ -4,6 +4,7 @@
 // OpenTUI for keyboard/mouse; the run streams in via the store. Args mirror the
 // node CLI's, passed after `--`.
 
+import { Buffer } from "node:buffer";
 import { isAbsolute, resolve } from "node:path";
 import process from "node:process";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -106,6 +107,43 @@ function buildTuiDefaults(
     ...(tools === undefined ? {} : { tools }),
     ...(skills === undefined ? {} : { skills }),
     ...(plugins === undefined ? {} : { plugins }),
+  };
+}
+
+/**
+ * Capture the program's direct stdout/stderr writes into the store so they render
+ * in the transcript pane instead of bleeding onto OpenTUI's screen. Safe to patch
+ * the public `process.stdout.write`: OpenTUI renders its frames through its own
+ * saved write handle, not this one. Returns a restore function.
+ */
+function captureProgramOutput(store: ReturnType<typeof createStore>): () => void {
+  const patch = (stream: NodeJS.WriteStream): (() => void) => {
+    const original = stream.write.bind(stream);
+    const write = (chunk: unknown, encodingOrCb?: unknown, cb?: unknown): boolean => {
+      const text =
+        typeof chunk === "string"
+          ? chunk
+          : Buffer.from(chunk as Uint8Array).toString(
+              typeof encodingOrCb === "string" ? (encodingOrCb as BufferEncoding) : "utf8",
+            );
+      store.pushStdout(text);
+      // Honour the write callback so a caller awaiting the drain isn't left hanging.
+      const callback = typeof encodingOrCb === "function" ? encodingOrCb : cb;
+      if (typeof callback === "function") {
+        (callback as (error?: Error | null) => void)();
+      }
+      return true;
+    };
+    stream.write = write;
+    return () => {
+      stream.write = original;
+    };
+  };
+  const restores = [patch(process.stdout), patch(process.stderr)];
+  return () => {
+    for (const restore of restores) {
+      restore();
+    }
   };
 }
 
@@ -224,21 +262,27 @@ async function main(): Promise<void> {
   const tools = parseList(values.tools);
   const defaults = buildTuiDefaults(values.thinking, tools, skills, plugins);
   const turnStore = resolveTuiStore(values.store);
-  await runIntoStore(
-    ProgramClass,
-    input,
-    {
-      harnesses,
-      ...(values.harness === undefined ? {} : { defaultHarness: values.harness }),
-      model,
-      sourceFile,
-      signal: controller.signal,
-      onEvent: (event: AgentEvent) => store.push(event),
-      ...(Object.keys(defaults).length > 0 ? { defaults } : {}),
-      ...(turnStore === undefined ? {} : { store: turnStore }),
-    },
-    store,
-  );
+  // Route the program's stdout/stderr into the pane for the duration of the run.
+  const restoreStdout = captureProgramOutput(store);
+  try {
+    await runIntoStore(
+      ProgramClass,
+      input,
+      {
+        harnesses,
+        ...(values.harness === undefined ? {} : { defaultHarness: values.harness }),
+        model,
+        sourceFile,
+        signal: controller.signal,
+        onEvent: (event: AgentEvent) => store.push(event),
+        ...(Object.keys(defaults).length > 0 ? { defaults } : {}),
+        ...(turnStore === undefined ? {} : { store: turnStore }),
+      },
+      store,
+    );
+  } finally {
+    restoreStdout();
+  }
 }
 
 function errMessage(error: unknown): string {

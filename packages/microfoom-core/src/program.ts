@@ -286,6 +286,19 @@ function resolveCaps(config: AgentConfig): ResolvedCaps {
   return caps;
 }
 
+/**
+ * The active foom_call frame, carried in AsyncLocalStorage so concurrent turns and
+ * parallel foom_calls never clobber each other's depth or method config (a shared
+ * mutable field would race when two calls interleave). `depth` 0 = top-level (issued
+ * by the program); `methodConfig` is the \@foom.config of the method whose body is
+ * running, applied to the turns it makes. Absent store = top level (depth 0, no
+ * method config).
+ */
+interface CallFrame {
+  readonly depth: number;
+  readonly methodConfig: AgentConfig | undefined;
+}
+
 interface Runtime {
   readonly instance: object;
   readonly harnesses: Record<string, OpenSession>;
@@ -298,8 +311,10 @@ interface Runtime {
   usage: UsageAccount;
   readonly listeners: Set<(event: AgentEvent) => void>;
   readonly nextSpan: () => string;
-  depth: number;
-  methodConfig: AgentConfig | undefined;
+  /** The active {@link CallFrame} (depth + method config), async-context-local so
+   *  concurrent turns/foom_calls don't clobber each other. Drives the WIP gate
+   *  (depth-0 only), maxCallDepth, and which method's \@foom.config a nested turn sees. */
+  readonly callFrame: AsyncLocalStorage<CallFrame>;
   readonly spanALS: AsyncLocalStorage<string | undefined>;
   /** Program-level abort signal (RunProgramOptions.signal), combined into every
    *  turn's signal so an external abort cancels the whole run. */
@@ -400,7 +415,7 @@ function buildContext(runtime: Runtime): ProgramTurnContext {
     isExposed: (method: string): boolean => runtime.exposed.has(method),
     paramSchema: (method: string) => deriveFor(runtime, method)?.jsonSchema,
     toolTierMethods: toolTier,
-    depth: (): number => runtime.depth,
+    depth: (): number => runtime.callFrame.getStore()?.depth ?? 0,
     validateArgs: async (method: string, args: unknown) => {
       const derived = deriveFor(runtime, method);
       if (derived === undefined) {
@@ -423,20 +438,23 @@ function buildContext(runtime: Runtime): ProgramTurnContext {
       if (typeof fn !== "function") {
         throw new FoomDispatchError(`method "${method}" is missing`);
       }
-      const previousDepth = runtime.depth;
-      const previousMethodConfig = runtime.methodConfig;
-      runtime.depth = previousDepth + 1;
-      runtime.methodConfig = methodConfigOf(runtime, method);
-      try {
+      // Run the method (and every turn it spawns) in a child call frame — one level
+      // deeper, carrying this method's @foom.config — held in AsyncLocalStorage. So a
+      // nested turn sees depth>0 (the WIP gate exempts it) and this method's config,
+      // even when sibling foom_calls run concurrently; a shared mutable would race.
+      const parent = runtime.callFrame.getStore();
+      const childFrame: CallFrame = {
+        depth: (parent?.depth ?? 0) + 1,
+        methodConfig: methodConfigOf(runtime, method),
+      };
+      // eslint-disable-next-line @typescript-eslint/promise-function-async -- the callback forwards the method-run promise so the frame covers it (and nested turns); it is not itself async.
+      const result = await runtime.callFrame.run(childFrame, () =>
         // eslint-disable-next-line @typescript-eslint/promise-function-async -- Promise.resolve normalizes a possibly-synchronous method result; the exposed method may be sync or async.
-        const result = await withSpan(runtime, method, "method", () =>
+        withSpan(runtime, method, "method", () =>
           Promise.resolve(fn.apply(runtime.instance, positional)),
-        );
-        return result === undefined ? "" : JSON.stringify(result);
-      } finally {
-        runtime.depth = previousDepth;
-        runtime.methodConfig = previousMethodConfig;
-      }
+        ),
+      );
+      return result === undefined ? "" : JSON.stringify(result);
     },
   };
 }
@@ -445,7 +463,7 @@ interface Prepared {
   readonly model: string;
   readonly systemPrompt: string;
   readonly caps: ResolvedCaps;
-  readonly maxConcurrentTurns?: number;
+  readonly maxConcurrentRootTurns?: number;
   readonly thinking?: string;
   readonly tools?: readonly string[];
   readonly omitBasePrompt?: boolean;
@@ -501,7 +519,7 @@ function prepare(runtime: Runtime, options: AgentOptions, frozen?: FrozenIdentit
   const scopes = [
     runtime.defaults,
     runtime.classConfig,
-    runtime.methodConfig,
+    runtime.callFrame.getStore()?.methodConfig,
     pickConfig(options),
   ].filter((c): c is AgentConfig => c !== undefined);
   const merged = mergeConfigChain(scopes);
@@ -513,20 +531,20 @@ function prepare(runtime: Runtime, options: AgentOptions, frozen?: FrozenIdentit
   const omitBasePrompt =
     frozen === undefined ? merged.omitHarnessBasePrompt : frozen.omitBasePrompt;
   if (
-    merged.maxConcurrentTurns !== undefined &&
-    (!Number.isSafeInteger(merged.maxConcurrentTurns) || merged.maxConcurrentTurns < 1)
+    merged.maxConcurrentRootTurns !== undefined &&
+    (!Number.isSafeInteger(merged.maxConcurrentRootTurns) || merged.maxConcurrentRootTurns < 1)
   ) {
     throw new FoomConfigError(
-      `maxConcurrentTurns must be a positive integer, got ${merged.maxConcurrentTurns}`,
+      `maxConcurrentRootTurns must be a positive integer, got ${merged.maxConcurrentRootTurns}`,
     );
   }
   const prepared: Prepared = {
     model: merged.model,
     systemPrompt,
     caps: resolveCaps(merged),
-    ...(merged.maxConcurrentTurns === undefined
+    ...(merged.maxConcurrentRootTurns === undefined
       ? {}
-      : { maxConcurrentTurns: merged.maxConcurrentTurns }),
+      : { maxConcurrentRootTurns: merged.maxConcurrentRootTurns }),
     ...(merged.thinking === undefined ? {} : { thinking: merged.thinking }),
     ...(merged.tools === undefined ? {} : { tools: merged.tools }),
     ...(omitBasePrompt === undefined ? {} : { omitBasePrompt }),
@@ -545,7 +563,7 @@ function freezeIdentity(runtime: Runtime, options: AgentOptions): FrozenIdentity
   const scopes = [
     runtime.defaults,
     runtime.classConfig,
-    runtime.methodConfig,
+    runtime.callFrame.getStore()?.methodConfig,
     pickConfig(options),
   ].filter((c): c is AgentConfig => c !== undefined);
   const merged = mergeConfigChain(scopes);
@@ -687,7 +705,6 @@ function buildRunTurnParams(args: {
   options: AgentOptions;
   onStreamChunk: ((chunk: string) => void) | undefined;
   signal: AbortSignal;
-  capacityLease: ConcurrencyLease;
   fold: (delta: UsageAccount) => UsageAccount;
 }): RunTurnParams {
   const { prepared, runtime, span, traced, options, onStreamChunk } = args;
@@ -708,7 +725,6 @@ function buildRunTurnParams(args: {
     ...(options.onToken === undefined ? {} : { onToken: options.onToken }),
     ...(onStreamChunk === undefined ? {} : { onStreamChunk }),
     signal: args.signal,
-    capacityLease: args.capacityLease,
   };
 }
 
@@ -858,7 +874,12 @@ async function driveTurn(
     const prepared = prepare(runtime, options, frozen);
     // Resolve the store + content hash up front: a hit short-circuits the model.
     const storeCtx = turnStoreCtx(deps, prepared, mode, prompt);
-    capacityLease = await runtime.concurrency.acquire(prepared.maxConcurrentTurns, signal);
+    // Only a TOP-LEVEL (depth-0) turn consumes a work-in-progress slot; a nested
+    // foom_call turn is part of its parent's work and runs exempt (no permit), so
+    // re-entry can never deadlock the cap regardless of how many run in parallel.
+    const rootLimit =
+      (runtime.callFrame.getStore()?.depth ?? 0) > 0 ? undefined : prepared.maxConcurrentRootTurns;
+    capacityLease = await runtime.concurrency.acquire(rootLimit, signal);
     span = runtime.nextSpan();
     traced = runtime.listeners.size > 0;
     if (traced) {
@@ -888,7 +909,6 @@ async function driveTurn(
     // Run the turn body under this span so a method the agent foom_calls
     // mid-turn (and its own turns) nest beneath it.
     const activeSpan = span;
-    const activeCapacityLease = capacityLease;
     const outcome = await runtime.spanALS.run(activeSpan, async () =>
       runProgramTurn(
         buildRunTurnParams({
@@ -902,7 +922,6 @@ async function driveTurn(
           options,
           onStreamChunk,
           signal,
-          capacityLease: activeCapacityLease,
           fold,
         }),
       ),
@@ -999,7 +1018,7 @@ function makeRun(
 function statelessSource(runtime: Runtime, model: string, options: AgentOptions): SessionSource {
   // Each stateless turn gets its own fresh session (no shared transcript). The
   // harness is resolved per turn, so a method's @foom.config({ harness }) (live in
-  // runtime.methodConfig while it runs) takes effect for turns it makes.
+  // runtime.callFrame.getStore()?.methodConfig while it runs) takes effect for turns it makes.
   return {
     get: async () =>
       harnessPort(runtime, optionsHarness(runtime, options))(openOptions(runtime, model, options)),
@@ -1125,9 +1144,12 @@ function harnessPort(runtime: Runtime, name: string): OpenSession {
  */
 function optionsHarness(runtime: Runtime, options: AgentOptions): string {
   const merged = mergeConfigChain(
-    [runtime.defaults, runtime.classConfig, runtime.methodConfig, pickConfig(options)].filter(
-      (c): c is AgentConfig => c !== undefined,
-    ),
+    [
+      runtime.defaults,
+      runtime.classConfig,
+      runtime.callFrame.getStore()?.methodConfig,
+      pickConfig(options),
+    ].filter((c): c is AgentConfig => c !== undefined),
   );
   if (merged.harness === undefined) {
     throw new FoomConfigError(
@@ -1343,8 +1365,7 @@ async function runProgram<P extends FoomProgram<never, unknown>>(
         return `span-${n}`;
       };
     })(),
-    depth: 0,
-    methodConfig: undefined,
+    callFrame: new AsyncLocalStorage<CallFrame>(),
     spanALS: new AsyncLocalStorage<string | undefined>(),
     concurrency: new ConcurrencyGate(),
     ...(options.store === undefined ? {} : { store: options.store }),

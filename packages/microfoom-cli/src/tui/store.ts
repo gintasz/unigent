@@ -19,6 +19,9 @@ interface TuiSnapshot {
   readonly status: "running" | "done" | "error" | "aborted";
   readonly result: string | undefined;
   readonly error: string | undefined;
+  /** Anything the program wrote to stdout/stderr — captured so it renders in the
+   *  pane instead of bleeding onto OpenTUI's screen. */
+  readonly stdout: string;
 }
 
 interface TuiStore {
@@ -26,6 +29,8 @@ interface TuiStore {
   getSnapshot: () => TuiSnapshot;
   /** Feed one run event (coalesced into the next render tick). */
   push: (event: AgentEvent) => void;
+  /** Capture a chunk the program wrote to stdout/stderr (coalesced). */
+  pushStdout: (chunk: string) => void;
   /** Set run metadata (header). */
   setMeta: (meta: RunMeta) => void;
   /** Mark the run settled; the view stays up. */
@@ -42,13 +47,14 @@ function createStore(): TuiStore {
   let status: TuiSnapshot["status"] = "running";
   let result: string | undefined;
   let error: string | undefined;
+  let stdout = "";
 
-  let snapshot: TuiSnapshot = { meta, events, status, result, error };
+  let snapshot: TuiSnapshot = { meta, events, status, result, error, stdout };
   const listeners = new Set<() => void>();
   let timer: ReturnType<typeof setTimeout> | undefined;
 
   const rebuild = (): void => {
-    snapshot = { meta, events: events.slice(), status, result, error };
+    snapshot = { meta, events: events.slice(), status, result, error, stdout };
     for (const listener of listeners) {
       listener();
     }
@@ -72,6 +78,10 @@ function createStore(): TuiStore {
     },
     push(event: AgentEvent): void {
       events.push(event);
+      schedule();
+    },
+    pushStdout(chunk: string): void {
+      stdout += chunk;
       schedule();
     },
     setMeta(next: RunMeta): void {

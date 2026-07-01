@@ -44,64 +44,154 @@ npm install -g @microfoom/cli
 
 ## Example
 
+One coordination script, the whole surface — turn a one-line product idea into a
+polished elevator pitch. It runs offline on a real model with nothing to mock:
+every exposed method is pure local TypeScript, no network and no hypothetical APIs.
+This is [`examples/pitch.ts`](examples/pitch.ts) verbatim — run it with
+`microfoom run examples/pitch.ts "a budgeting app for freelancers"`.
+
 ```ts
-import { appendFile } from "node:fs/promises";
-import { foom, Program } from "@microfoom/core";
+import { writeFile } from "node:fs/promises";
+import { FoomThrowError, foom, Program } from "@microfoom/core";
+// The trace entry types `scope` / `annotate` / `log` / `usage` onto this.agent.
+import "@microfoom/core/trace";
 import { z } from "zod"; // any Standard Schema validator works
 
-const Input = z.object({ topic: z.string() });
-type Input = z.infer<typeof Input>;
+const WHITESPACE = /\s+/u;
 
-const Report = z.object({ summary: z.string(), confidence: z.number().min(0).max(1) });
-type Report = z.infer<typeof Report>;
+// A bare Standard Schema is a valid program input — so the CLI's positional arg
+// (`microfoom run pitch.ts "an app idea"`) lands straight in `main(idea)`.
+const Idea = z.string().min(1);
 
-@foom.config({ model: "openrouter/deepseek/deepseek-v4-flash", harness: "pi", thinking: "low" })
-export default class extends Program(Input) {
-  async main({ topic }: Input): Promise<Report> {
-    // A structured turn on the default harness: split the topic up.
-    const questions = await this.agent.value(z.array(z.string()).max(5))`
-      List 5 key open questions about ${topic}. Provide them via foom_return tool.`;
+const Pitch = z.object({
+  headline: z.string(),
+  body: z.string(),
+  score: z.number().min(0).max(100),
+});
+type Pitch = z.infer<typeof Pitch>;
 
-    // Cross-harness: route the hard reasoning to a stronger harness (or model), and
-    // fan the questions out in parallel — ordinary TypeScript owns the control flow.
-    const findings = await Promise.all(
-      questions.map((q) =>
-        this.agent
-          .with({ harness: "claudecli", model: "sonnet", thinking: "high" })
-          .prose`Answer concisely, call "headlines" method via foom_call tool if it helps: ${q}`),
+// Class scope of the config cascade (run-defaults → class → method → .with): a cheap
+// model on the pi harness, FOOM-only (no harness tools — the program drives every
+// side effect through @foom.expose), plus run-wide caps and a system-prompt append.
+@foom.config({
+  model: "openrouter/deepseek/deepseek-v4-flash",
+  harness: "pi",
+  thinking: "low",
+  tools: [], // tri-state: [] = no harness tools; FOOM tools are always available
+  retries: 1, // re-run a turn once on a transient harness/network failure
+  maxConcurrentRootTurns: 4, // cap concurrent top-level turns; nested foom_calls exempt (tighten-only)
+  maxBudgetUsd: 0.5, // whole-run cost ceiling; exceeding aborts
+  systemPrompt: { append: "Be terse. Marketing copy, never code." },
+})
+export default class Pitchwright extends Program(Idea) {
+  static maxProgramDuration = "3m"; // whole-program wall-clock ceiling
+
+  async main(idea: string): Promise<Pitch> {
+    // 1) Structured turn → schema-validated, typed value. The agent ends with
+    //    foom_return; malformed output is auto-repaired. If the idea is unworkable
+    //    it calls foom_throw instead — surfaced to your code as FoomThrowError.
+    let angles: string[];
+    try {
+      angles = await this.agent.value(z.array(z.string()).max(4))`
+        List up to 4 distinct angles to pitch a solution for this idea: ${idea}.
+        If the idea is empty or incoherent, call foom_throw instead. foom_return the list.`;
+    } catch (error) {
+      if (error instanceof FoomThrowError) {
+        throw new Error(`unworkable idea: ${error.message}`, { cause: error });
+      }
+      throw error;
+    }
+
+    // 2) A named trace scope: annotate it, fan child turns out in PARALLEL (plain
+    //    TypeScript owns the control flow), each one foom_calling the exposed `rate`
+    //    method (its own span nests under the scope), then log a line. The whole
+    //    subtree shows up in the --tui inspector.
+    const ranking = this.agent.scope("rank");
+    ranking.annotate({ angleCount: angles.length });
+    const scored = await Promise.all(
+      angles.map(
+        (angle, i) =>
+          ranking
+            .with({ label: `angle-${i}` })
+            .value(z.object({ angle: z.string(), score: z.number() }))`
+            Call rate on this angle to get a 0–100 punchiness score: ${angle}.
+            foom_return { angle, score } using that score.`,
+      ),
     );
+    const best = scored.reduce((a, b) => (b.score > a.score ? b : a));
+    ranking.log(`best angle scored ${best.score}`);
 
-    // An act turn (`do`): run instructions for their side effects, return nothing —
-    // no tokens wasted on a response you don't read. The agent is told to call
-    // foom_return with no arguments once the work is done.
-    await this.agent.do`Save each finding with the "note" method via foom_call tool: ${findings.join("\n")}`;
+    // 3) Cross-session: open a STATEFUL session (shared transcript), seed it once,
+    //    then fork() into two independent tonal branches that each continue from
+    //    that shared context. Pick the better-scoring draft.
+    const draft = this.agent.session({ thinking: "medium" });
+    await draft.prose`We are drafting an elevator pitch for this angle: ${best.angle}. Reply "ready".`;
+    const [punchy, formal] = await Promise.all([
+      draft.fork().value(Pitch)`
+        Write a PUNCHY two-line pitch (headline + body, each under 12 words — you may
+        call wordCount to check). Call rate on the body and put that in "score". foom_return the Pitch.`,
+      draft.fork().value(Pitch)`
+        Write a FORMAL, credible two-line pitch. Call rate on the body and put that in
+        "score". foom_return the Pitch.`,
+    ]);
+    const draftWinner = punchy.score >= formal.score ? punchy : formal;
 
-    // Structured, schema-validated result — typed the moment you await it.
-    return this.agent.value(Report)`
-      Write a report on ${topic} from those findings, then provide it via foom_return tool.`;
+    // 4) Best-of-N on a STRONGER model (cross-model). Two stateless samples of one
+    //    prompt: distinct `storeKey`s keep them as separate store records under
+    //    --store (otherwise identical turns collapse to one). Keep the better.
+    //    Swap `model` for `harness: "claudecli"` here to route it CROSS-HARNESS
+    //    (register that adapter — see "Run it" below).
+    const polish = (key: string) =>
+      this.agent
+        .with({ model: "openrouter/deepseek/deepseek-v4-pro", thinking: "high", storeKey: key })
+        .value(Pitch)`
+          Tighten this pitch to its sharpest, most truthful form. Call rate on the new
+          body and put that number in "score". foom_return the Pitch: ${JSON.stringify(draftWinner)}`;
+    const samples = await Promise.all([polish("polish-a"), polish("polish-b")]);
+    const winner = samples.reduce((a, b) => (b.score > a.score ? b : a));
+
+    // 5) Act turn (`do`): side effects only, no response tokens billed. The agent
+    //    persists the result through the `save` tool, then ends with a no-arg foom_return.
+    await this.agent.do`Save the final pitch via the save tool: ${JSON.stringify(winner)}`;
+
+    // 6) Read run usage and record it as a trace log — it shows in the --tui span
+    //    tree / run panel (no stdout; `this.agent.usage` is a live snapshot).
+    const { totalTokens, costUsd } = this.agent.usage;
+    this.agent.scope("usage").log(`${totalTokens} tokens · $${(costUsd ?? 0).toFixed(4)}`);
+
+    return winner;
   }
 
-  // Silent expose: callable via foom_call, but the agent doesn't know it exists
-  // until you name it in your prompt. It must foom_inspect to learn the argument signature before calling.
+  // Silent expose: agent-callable via foom_call, but NOT advertised — the agent
+  // only learns it exists when you name it in a prompt, then foom_inspects its
+  // signature before calling. Pure, offline.
   @foom.expose
-  async note(text: string): Promise<void> {
-    await appendFile("notes.md", `- ${text}\n`);
+  async wordCount(text: string): Promise<number> {
+    return text.trim().split(WHITESPACE).filter(Boolean).length;
   }
 
-  // Announced expose: the agent is told the method exists in its system prompt.
-  // It must foom_inspect to learn the argument signature before calling.
-  @foom.expose({ announcement: "Fetch recent headlines for a query." })
-  async headlines(query: string): Promise<string[]> {
-    return (await fetch(`https://news.api/search?q=${query}`)).json();
+  // Announced expose: named in the system prompt so the agent knows it's there
+  // (it still foom_inspects for the signature). A deterministic punchiness score.
+  @foom.expose({ announcement: "Returns a 0–100 punchiness score for a line of copy." })
+  async rate(text: string): Promise<number> {
+    const words = await this.wordCount(text);
+    return Math.max(0, Math.min(100, 120 - words * 6));
   }
 
-  // Tool expose: registers as a first-class agent tool inside the harness.
-  @foom.expose({ tool: { description: "Search the web for a query." } })
-  async searchWeb(query: string): Promise<string[]> {
-    return (await fetch(`https://search.api/q?query=${query}`)).json();
+  // Tool expose: a first-class native tool the harness advertises up front, with a
+  // full parameter schema. Persists the result to disk.
+  @foom.expose({ tool: { description: "Persist the final pitch as JSON to ./pitch.json." } })
+  async save(pitch: Pitch): Promise<void> {
+    await writeFile("./pitch.json", `${JSON.stringify(pitch, null, 2)}\n`);
   }
 }
 ```
+
+One script: structured `value` / freeform `prose` / side-effecting `do`; parallel
+fan-out under a traced `scope` (with `annotate`/`log`); a stateful `session()` you
+`fork()`; per-call cross-model routing; best-of-N with `storeKey`; all three
+`@foom.expose` tiers; a `foom_throw` guard; and the config cascade with run-wide caps.
+The pieces are unpacked in the sections below.
 
 ## Turn modes
 
@@ -167,7 +257,7 @@ Set config with `@foom.config({ ... })` on a class or method, with `.with({ ... 
 | `maxBudgetUsd` | Cost ceiling; exceeding aborts. Tighten-only. |
 | `maxOutputTokens` | Output-token ceiling. Tighten-only. |
 | `maxCallDepth` | Max `foom_call` re-entry depth. Tighten-only. |
-| `maxConcurrentTurns` | Max concurrent model turns in one run. Tighten-only. FOOM tool handlers do not consume a slot, so nested `foom_call` re-entry cannot deadlock a single-slot run. |
+| `maxConcurrentRootTurns` | Max concurrent **top-level** (depth-0) turns in one run — a work-in-progress limit, run-to-completion. Nested `foom_call` turns are part of their parent's work and don't count, so re-entry can never deadlock the cap. Tighten-only. |
 | `maxTurnDuration` | Wall-clock ceiling for one turn (e.g. `"30s"`). Tighten-only. |
 
 A whole-program wall-clock ceiling is a `static maxProgramDuration` on the program class (e.g. `"5m"`).
@@ -191,16 +281,23 @@ Register the harnesses you want under names, then select per scope via `@foom.co
 The CLI runs a program file with zero boilerplate — model/auth resolved from the pi harness, the program result on stdout, observability on stderr.
 
 ```sh
+<<<<<<< Updated upstream
 microfoom run ./researcher.ts "tides"
 microfoom run ./researcher.ts "tides" --json        # result as JSON
 microfoom run ./researcher.ts "tides" --harness pi # 
 microfoom run ./researcher.ts "tides" --store ./.microfoom/tides.jsonl  # store agent turn outcomes, re-run the same command to resume
+=======
+microfoom run examples/pitch.ts "a budgeting app for freelancers"
+microfoom run examples/pitch.ts "a budgeting app" --json        # result as JSON
+microfoom run examples/pitch.ts "a budgeting app" --store ./.microfoom/pitch.jsonl  # store turn outcomes; re-run to resume
+microfoom run examples/audit.ts "acme.com" --harness fake        # offline, deterministic, no model (string-typed turns)
+>>>>>>> Stashed changes
 ```
 
 Add `--tui` to open a two-pane inspector: the live span tree on the left, the agent's transcript for the selected span on the right.
 
 ```sh
-microfoom run ./researcher.ts --tui
+microfoom run examples/pitch.ts "a budgeting app" --tui
 ```
 
 <div align="center">
@@ -216,16 +313,18 @@ You can also run it programmatically.
 import { createFileTurnStore, runProgram } from "@microfoom/core";
 import { createPiOpenSession } from "@microfoom/pi-adapter";
 import { createClaudeCliOpenSession } from "@microfoom/claudecli-adapter";
+import Pitchwright from "./examples/pitch.ts";
 
-const report = await runProgram(MyProgram, { topic: "tides" }, {
+const pitch = await runProgram(Pitchwright, "a budgeting app for freelancers", {
   harnesses: {
     pi: createPiOpenSession(),
+    // Registering claudecli lets the example's step 4 route cross-harness.
     claudecli: createClaudeCliOpenSession(),
   },
   defaultHarness: "pi",
   model: "openrouter/deepseek/deepseek-v4-flash",
-  sourceFile: "./my-program.ts", // required for foom_call parameter derivation
-  store: createFileTurnStore("./.microfoom/tides.jsonl"), // omit → nothing persisted
+  sourceFile: "./examples/pitch.ts", // required for foom_call parameter derivation
+  store: createFileTurnStore("./.microfoom/pitch.jsonl"), // omit → nothing persisted
 });
 ```
 

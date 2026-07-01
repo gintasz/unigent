@@ -22,6 +22,7 @@ import { copyToClipboard } from "./clipboard.js";
 import { runControlAction } from "./keys.js";
 import { MacScrollAccel } from "./scroll.js";
 import type { TuiStore } from "./store.js";
+import { tidy } from "./text.js";
 import type { Palette, ThemeMode } from "./theme.js";
 import { paletteFor } from "./theme.js";
 import { flattenTree, subtreeSpans, type TreeRow } from "./tree.js";
@@ -418,10 +419,13 @@ interface TranscriptPaneProps {
   readonly focused: boolean;
   readonly transcriptAccel: MacScrollAccel;
   readonly showNotices: boolean;
+  /** Whatever the program wrote to stdout/stderr, captured (not span-scoped). */
+  readonly programOutput: string;
 }
 
 function TranscriptPane(props: TranscriptPaneProps): React.ReactNode {
   const { palette, shown, error, status, selected, focused, transcriptAccel, showNotices } = props;
+  const programOutput = tidy(props.programOutput);
   return (
     <scrollbox
       flexGrow={1}
@@ -432,7 +436,7 @@ function TranscriptPane(props: TranscriptPaneProps): React.ReactNode {
       backgroundColor={palette.bg}
       border={true}
       borderColor={palette.border}
-      title={focused ? ` TRANSCRIPT · ${selected} ` : " TRANSCRIPT "}
+      title={focused ? ` TRANSCRIPT · ${selected} ` : " TRANSCRIPT (all) "}
       titleColor={palette.dim}
     >
       {shown.length === 0 && error === undefined ? (
@@ -443,6 +447,16 @@ function TranscriptPane(props: TranscriptPaneProps): React.ReactNode {
         shown.map((entry, i) => (
           <EntryView key={i} entry={entry} palette={palette} showNotices={showNotices} />
         ))
+      )}
+      {/* Program stdout/stderr, captured so it renders here instead of bleeding
+          onto the screen. Not span-scoped, so it shows regardless of focus. */}
+      {programOutput.length === 0 ? null : (
+        <box flexDirection="column" paddingTop={1} paddingLeft={1} paddingRight={1}>
+          <text fg={palette.dim}>▣ stdout</text>
+          <text fg={palette.dim} wrapMode="word">
+            {programOutput}
+          </text>
+        </box>
       )}
       {/* Surface a run failure (bad input schema, thrown program, …) in the pane
           itself — the header alone only flips to "● error". Last child so it stays
@@ -547,6 +561,7 @@ function App({
           focused={v.focused}
           transcriptAccel={v.transcriptAccel}
           showNotices={showNotices}
+          programOutput={v.snapshot.stdout}
         />
       </box>
       <AppFooter
@@ -676,14 +691,14 @@ function describe(
       return {
         header: "● assistant",
         headerColor: pal.accent,
-        body: entry.text,
+        body: tidy(entry.text),
         bodyColor: pal.fg,
       };
     case "thinking":
       return {
         header: "✻ thinking",
         headerColor: pal.thinking,
-        body: entry.text,
+        body: tidy(entry.text),
         bodyColor: pal.dim,
       };
     case "tool_call":
@@ -697,7 +712,7 @@ function describe(
       return {
         header: entry.isError ? "✗ tool error" : "✓ tool result",
         headerColor: entry.isError ? pal.error : pal.ok,
-        body: ellipsizeBlock(entry.content, ENTRY_BODY_MAX_CHARS),
+        body: ellipsizeBlock(tidy(entry.content), ENTRY_BODY_MAX_CHARS),
         bodyColor: entry.isError ? pal.error : pal.fg,
       };
   }

@@ -1,12 +1,13 @@
-// Run-local model-turn capacity control. The permit is released while FOOM tool
-// handlers run, because tool handlers are deterministic host work and may start
-// nested turns; holding capacity through that boundary deadlocks max=1 re-entry.
+// Run-local capacity gate for concurrent TOP-LEVEL turns — the work-in-progress
+// limit (maxConcurrentRootTurns). A top-level turn holds its permit for its whole
+// life and disposes it when it settles; nested foom_call turns are exempt at the
+// call site (they never acquire), so the permit is never released across a tool
+// boundary and re-entry can't deadlock. Admission is FIFO, so a queued top-level
+// turn starts only when a running one frees its slot (run-to-completion).
 
 import { FoomCancelledError } from "./errors.js";
 
 interface ConcurrencyLease {
-  release: () => void;
-  reacquire: () => Promise<void>;
   dispose: () => void;
 }
 
@@ -19,18 +20,12 @@ interface QueueEntry {
 }
 
 const NOOP_LEASE: ConcurrencyLease = {
-  release(): void {
-    // Uncapped runs have no permit to release.
-  },
-  async reacquire(): Promise<void> {
-    // Uncapped runs have no permit to reacquire.
-  },
   dispose(): void {
-    // Uncapped runs have no permit to dispose.
+    // Uncapped (or exempt nested) turns have no permit to dispose.
   },
 };
 
-/** A FIFO, abort-aware capacity gate for concurrent model turns in one run. */
+/** A FIFO, abort-aware capacity gate for concurrent top-level turns in one run. */
 class ConcurrencyGate {
   private active = 0;
   private readonly queue: QueueEntry[] = [];
@@ -44,7 +39,7 @@ class ConcurrencyGate {
     }
     if (this.queue.length === 0 && this.active < limit) {
       this.active += 1;
-      return this.makeLease(limit, signal);
+      return this.makeLease();
     }
     return new Promise<ConcurrencyLease>((resolve, reject) => {
       const entry: QueueEntry = { limit, resolve, reject, signal, onAbort: undefined };
@@ -57,32 +52,14 @@ class ConcurrencyGate {
     });
   }
 
-  private makeLease(limit: number, signal: AbortSignal): ConcurrencyLease {
-    const state = { held: true, disposed: false };
-    const disposedController = new AbortController();
-    const leaseSignal = AbortSignal.any([signal, disposedController.signal]);
+  private makeLease(): ConcurrencyLease {
+    let held = true;
     return {
-      release: (): void => {
-        if (!state.held || state.disposed) {
-          return;
-        }
-        state.held = false;
-        this.release();
-      },
-      reacquire: async (): Promise<void> => {
-        if (state.held || state.disposed) {
-          return;
-        }
-        await this.acquire(limit, leaseSignal);
-        state.held = true;
-      },
       dispose: (): void => {
-        state.disposed = true;
-        disposedController.abort();
-        if (!state.held) {
+        if (!held) {
           return;
         }
-        state.held = false;
+        held = false;
         this.release();
       },
     };
@@ -102,7 +79,7 @@ class ConcurrencyGate {
       this.queue.shift();
       this.removeAbort(entry);
       this.active += 1;
-      entry.resolve(this.makeLease(entry.limit, entry.signal));
+      entry.resolve(this.makeLease());
     }
   }
 

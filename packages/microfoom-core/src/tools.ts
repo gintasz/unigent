@@ -7,7 +7,6 @@
 // are used directly — this is the harness seam, past the internal core.
 
 import type { StandardSchemaV1 } from "@standard-schema/spec";
-import type { ConcurrencyLease } from "./concurrency.js";
 import type { RepairChannel } from "./errors.js";
 import {
   FoomBudgetExceededError,
@@ -390,7 +389,6 @@ interface RunTurnParams {
   readonly onToken?: (token: LLMToken) => void;
   readonly onStreamChunk?: (chunk: string) => void;
   readonly signal?: AbortSignal;
-  readonly capacityLease?: ConcurrencyLease;
   readonly emit?: (event: AgentEvent) => void;
   readonly span?: string;
 }
@@ -425,26 +423,6 @@ function buildTurnRequest(
     request.signal = params.signal;
   }
   return request;
-}
-
-function releaseCapacityDuringTool(
-  tool: NeutralToolDef,
-  lease: ConcurrencyLease | undefined,
-): NeutralToolDef {
-  if (lease === undefined) {
-    return tool;
-  }
-  return {
-    ...tool,
-    execute: async (args: unknown): Promise<ToolExecResult> => {
-      lease.release();
-      try {
-        return await tool.execute(args);
-      } finally {
-        await lease.reacquire();
-      }
-    },
-  };
 }
 
 /** Bridge the harness's per-turn stream into the run's neutral event stream: token
@@ -606,7 +584,7 @@ async function runProgramTurn(params: RunTurnParams): Promise<TurnOutcome> {
     repair,
     params.caps.repairAttempts,
     emitter,
-  ).map((tool) => releaseCapacityDuringTool(tool, params.capacityLease));
+  );
 
   const request = buildTurnRequest(params, tools);
   request.onEvent = makeTurnEventForwarder(
