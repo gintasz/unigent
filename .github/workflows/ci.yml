@@ -13,18 +13,15 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
+      # typos has no npm build, so put the pinned binary on PATH for check:full's
+      # //#spell task (the local pre-push gate uses a dev-installed typos).
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: typos@1.48.0
       - run: pnpm install --frozen-lockfile
-      - run: pnpm run typecheck
-      - run: pnpm run format:check
-      - run: pnpm run lint
-      - run: pnpm run lint:types
-      - run: pnpm run build
-      - run: pnpm run arch
-      - run: pnpm run ast
-      - uses: crate-ci/typos@v1.48.0 # spell gate — pinned; reads _typos.toml
-      - run: pnpm run deps:check
-      - run: pnpm run dead
-      - run: pnpm run dup
-      - run: pnpm run coverage
+      # Single source of truth: the exact gate the pre-push hook runs (lefthook →
+      # check:full). Enumerating the tasks here let CI drift from it (it was missing
+      # audit/docs:check/api:check). One command, no drift.
+      - run: pnpm run check:full
       # e2e (real-LLM) runs separately; it skips, not fails, on provider/auth
       # errors (Q2) and needs model credentials, so it is not a merge gate here.
