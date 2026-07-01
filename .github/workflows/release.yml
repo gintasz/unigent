@@ -1,38 +1,34 @@
 name: Release
 
-# Changesets release flow. On every push to main the action opens/updates a
-# "Version Packages" PR that accumulates pending changesets; merging that PR (or a
-# manual workflow_dispatch with no pending changesets) publishes — and ONLY the
-# packages a changeset bumped, plus internal dependents whose dependency range moved.
+# Tag-triggered lockstep publish: every public package shares one version.
+# Cut a release locally, then push the tag:
 #
-# Auth supports both modes in one workflow:
-#   - Trusted Publishing (OIDC): `id-token: write` + provenance. Engages automatically
-#     once a trusted publisher is configured per package on npmjs.com (no secret).
-#   - NPM_TOKEN: classic granular automation token in repo secrets — the active path
-#     until/unless OIDC is configured. Provenance is emitted either way.
+#   pnpm -r exec npm version X.Y.Z --no-git-tag-version   # bump all packages
+#   git commit -am "release: vX.Y.Z"
+#   git tag vX.Y.Z && git push --follow-tags
+#
+# Pushing a v* tag runs this workflow: build, test, then publish every non-private
+# package at its package.json version. `pnpm publish` skips any version already on
+# npm, so re-running a tag is safe. Publishing needs the NPM_TOKEN secret; without
+# it the publish step fails (an ordinary tag can't leak a release without auth).
 
 on:
   push:
-    branches: [main]
+    tags: ["v*"]
   workflow_dispatch:
 
 concurrency: ${{ github.workflow }}-${{ github.ref }}
 
 permissions:
-  contents: write
-  pull-requests: write
-  id-token: write
+  contents: read
+  id-token: write # npm provenance (trusted publishing)
 
 jobs:
   release:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
       - uses: pnpm/action-setup@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -40,49 +36,12 @@ jobs:
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
+      - run: pnpm run build
+      - run: pnpm run test
 
-      # Clean-room gate only when this push actually publishes (the version-PR
-      # merge, message "chore: version packages"). ci.yml no longer runs on main
-      # pushes, so this is the release-context verification; ordinary pushes just
-      # refresh the version PR and skip build/test.
-      # Quoted like the `publish:` line below: the embedded ": " in
-      # 'chore: version packages' would otherwise parse as a YAML mapping.
-      - if: "${{ contains(github.event.head_commit.message, 'chore: version packages') }}"
-        run: pnpm run build && pnpm run test
-
-      # Publish is gated on two conditions; either being false leaves the
-      # `publish` input empty, so the action only opens/updates the version PR
-      # (needs GITHUB_TOKEN only) and never ships to npm:
-      #   1. NPM_TOKEN present — otherwise changeset publish dies with ENEEDAUTH.
-      #   2. The head commit is the Version Packages PR merge (its message
-      #      contains "chore: version packages", the `commit:`/`title:` below).
-      #      This means a release happens ONLY by merging that PR — an ordinary
-      #      push to main (even with no pending changesets) can never publish.
-      #      `contains` matches across squash, rebase, and merge-commit methods;
-      #      on workflow_dispatch head_commit is null, so manual runs only
-      #      refresh the version PR and never publish.
-      - id: npm_auth
-        run: |
-          if [ -n "$NPM_TOKEN" ]; then
-            echo "present=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "present=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::NPM_TOKEN not set — skipping publish, version PR only."
-          fi
+      # `release` = build + copy README/LICENSE into each package + pnpm -r publish
+      # (+ cleanup). Idempotent: versions already on npm are skipped.
+      - run: pnpm run release
         env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-      - name: Create release PR or publish changed packages
-        uses: changesets/action@v1
-        with:
-          version: pnpm run version-packages
-          # Quoted: the expression embeds "chore: version packages", whose
-          # ": " would otherwise make YAML parse this value as a mapping.
-          publish: "${{ (steps.npm_auth.outputs.present == 'true' && contains(github.event.head_commit.message, 'chore: version packages')) && 'pnpm run release' || '' }}"
-          title: "chore: version packages"
-          commit: "chore: version packages"
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           NPM_CONFIG_PROVENANCE: true

@@ -4,7 +4,7 @@ set -euo pipefail
 # Useful before triggering release: if the release workflow config and auth are
 # valid, this catches fresh-Linux install/build/test failures before the workflow
 # spends time reaching its publish path. It does not prove release-only steps
-# such as changesets/action behavior, npm publishing, provenance, or permissions.
+# such as tag-triggered publishing, provenance, or permissions.
 
 usage() {
   cat <<'EOF'

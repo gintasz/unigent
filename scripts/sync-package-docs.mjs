@@ -5,7 +5,7 @@
 // BEFORE running prepack, so a prepack-generated README never lands in the tarball
 // (LICENSE survives only via pnpm's always-bundle special case). So the copies must
 // already exist when publish runs. This script is invoked by the `release` script
-// (build -> sync -> changeset publish -> sync --clean), not as a lifecycle hook.
+// (build -> sync -> pnpm publish -> sync --clean), not as a lifecycle hook.
 // The copies are deliberately NOT gitignored: an ignore rule makes pnpm drop the
 // README again, so they are removed by the --clean pass instead.
 
