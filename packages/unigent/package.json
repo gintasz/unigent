@@ -1,6 +1,6 @@
 {
   "name": "@unigent/sdk",
-  "version": "0.1.1",
+  "version": "0.1.3",
   "type": "module",
   "description": "Cross-harness agent orchestration SDK for TypeScript",
   "keywords": [
@@ -62,26 +62,12 @@
     "prepublishOnly": "node ../../scripts/assert-package-docs.mjs"
   },
   "dependencies": {
-    "@earendil-works/pi-agent-core": "0.80.2",
-    "@earendil-works/pi-ai": "0.80.2",
-    "@earendil-works/pi-coding-agent": "0.80.2",
-    "@modelcontextprotocol/sdk": "1.29.0",
-    "@standard-schema/spec": "1.1.0",
     "@unigent/adapter-claude-cli": "workspace:*",
     "@unigent/adapter-codex-cli": "workspace:*",
     "@unigent/adapter-pi": "workspace:*",
     "@unigent/core": "workspace:*",
-    "@unigent/test": "workspace:*",
-    "ajv": "8.17.1",
-    "typebox": "1.1.38"
+    "@unigent/test": "workspace:*"
   },
-  "bundledDependencies": [
-    "@unigent/adapter-claude-cli",
-    "@unigent/adapter-codex-cli",
-    "@unigent/adapter-pi",
-    "@unigent/core",
-    "@unigent/test"
-  ],
   "peerDependencies": {
     "typescript": "5.9.3"
   },

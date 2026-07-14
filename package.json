@@ -1,6 +1,6 @@
 {
   "name": "@unigent/workspace",
-  "version": "0.1.1",
+  "version": "0.1.3",
   "private": true,
   "type": "module",
   "bin": {
@@ -60,6 +60,9 @@
     "cli": "node --import tsx packages/unigent-cli/src/cli.ts",
     "sync-docs": "node scripts/sync-package-docs.mjs",
     "release": "node scripts/release.mjs",
+    "release:stage": "node scripts/release-stage.mjs",
+    "release:verify": "node scripts/verify-release.mjs",
+    "release:promote": "node scripts/release-promote.mjs",
     "link": "corepack pnpm link",
     "unlink": "corepack pnpm uninstall --global @unigent/workspace",
     "check": "turbo run //#typecheck //#format:check //#lint //#lint:types //#ast --continue --output-logs=errors-only --log-order=grouped --log-prefix=none",

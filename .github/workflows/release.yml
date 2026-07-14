@@ -12,9 +12,10 @@ name: Release
 # workflow's verify step aborts before publishing.
 #
 # Pushing a v* tag runs this workflow: verify the tag matches every package.json
-# version, run the full gate (check:full), then publish every non-private package.
-# `pnpm publish` skips any version already on npm, so re-running a tag is safe. Publishing needs the NPM_TOKEN secret; without
-# it the publish step fails (an ordinary tag can't leak a release without auth).
+# version, run the full gate, publish every package under `next`, verify the exact
+# registry artifacts as clean consumers, then move `latest`. A failed verification
+# leaves the previous `latest` untouched. Publishing needs npm trusted publishing
+# or the NPM_TOKEN secret; without either, the stage step fails safely.
 
 on:
   push:
@@ -71,10 +72,18 @@ jobs:
       # docs + api). A tag pushed directly, bypassing a PR, is still fully vetted.
       - run: pnpm run check:full
 
-      # `release` = build + copy README/LICENSE into each package + pnpm -r publish
-      # (+ cleanup). build is incremental here (check:full warmed the tsc/turbo
-      # cache). Idempotent: versions already on npm are skipped.
-      - run: pnpm run release
+      # Publish dependency-first under `next`; ordinary installs still receive the
+      # previous `latest` if this job stops or registry verification fails.
+      - name: Stage packages under next
+        run: pnpm run release:stage
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           NPM_CONFIG_PROVENANCE: true
+
+      # This installs from npm with default audit behavior, adds another dependency,
+      # compiles a strict consumer with skipLibCheck=false, runs the fake backend,
+      # and exercises a global CLI install before changing `latest`.
+      - name: Verify registry artifacts and promote latest
+        run: pnpm run release:promote
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

@@ -64,9 +64,6 @@ import { InputPair } from '@unigent/core/args';
 import { JsonSchema } from '@unigent/core';
 import { OutputSchema } from '@unigent/core';
 import { parseArgs } from '@unigent/core/args';
-import { piAgent } from '@unigent/adapter-pi';
-import { PiAgentOptions } from '@unigent/adapter-pi';
-import { PiBase } from '@unigent/adapter-pi';
 import { SourceToolFunction } from '@unigent/core';
 import { SystemPrompt } from '@unigent/core';
 import { tool } from '@unigent/core';
@@ -193,11 +190,21 @@ export { OutputSchema }
 
 export { parseArgs }
 
-export { piAgent }
+// @public
+export function piAgent(options?: PiAgentOptions): Backend;
 
-export { PiAgentOptions }
+// @public
+export interface PiAgentOptions {
+    readonly base?: PiBase;
+    readonly basePrompt?: string;
+    readonly checkpointKey?: string;
+    readonly nativeTools?: readonly string[];
+    readonly plugins?: readonly string[];
+    readonly skills?: readonly string[];
+}
 
-export { PiBase }
+// @public
+export type PiBase = "clean" | "machine";
 
 export { SourceToolFunction }
 

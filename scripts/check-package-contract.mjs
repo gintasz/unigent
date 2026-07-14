@@ -9,7 +9,15 @@ const SCOPE_PREFIX = /^@/u;
 const TYPESCRIPT_DECLARATION = /\.d\.ts(?:\.map)?$/u;
 const packagesRoot = join(repoRoot, "packages");
 const canonicalReadme = readFileSync(join(repoRoot, "README.md"), "utf8");
-const EXPECTED_PUBLIC_PACKAGES = ["@unigent/cli", "@unigent/sdk"];
+const EXPECTED_PUBLIC_PACKAGES = [
+  "@unigent/adapter-claude-cli",
+  "@unigent/adapter-codex-cli",
+  "@unigent/adapter-pi",
+  "@unigent/cli",
+  "@unigent/core",
+  "@unigent/sdk",
+  "@unigent/test",
+];
 
 function run(command, args, cwd = repoRoot) {
   return execFileSync(command, args, { cwd, encoding: "utf8", stdio: "pipe" });
@@ -43,38 +51,6 @@ function packedManifest(archive) {
 
 function archiveEntries(archive) {
   return new Set(run("tar", ["-tf", archive]).trim().split("\n"));
-}
-
-function assertBundledDependencyClosure(archive, manifest) {
-  const entries = archiveEntries(archive);
-  const dependencies = new Set(Object.keys(manifest.dependencies ?? {}));
-  const peerDependencies = manifest.peerDependencies ?? {};
-  for (const bundledName of manifest.bundledDependencies ?? []) {
-    if (!dependencies.has(bundledName)) {
-      throw new Error(`${manifest.name} bundles ${bundledName} without declaring it`);
-    }
-    const manifestEntry = `package/node_modules/${bundledName}/package.json`;
-    if (!entries.has(manifestEntry)) {
-      throw new Error(`${manifest.name} tarball is missing bundled dependency ${bundledName}`);
-    }
-    const bundledManifest = JSON.parse(run("tar", ["-xOf", archive, manifestEntry]));
-    for (const dependency of Object.keys(bundledManifest.dependencies ?? {})) {
-      if (!dependencies.has(dependency)) {
-        throw new Error(
-          `${manifest.name} must declare ${dependency}, required by bundled ${bundledName}`,
-        );
-      }
-    }
-    for (const [peerDependency, version] of Object.entries(
-      bundledManifest.peerDependencies ?? {},
-    )) {
-      if (peerDependencies[peerDependency] !== version) {
-        throw new Error(
-          `${manifest.name} must propagate peer ${peerDependency}@${version} from bundled ${bundledName}`,
-        );
-      }
-    }
-  }
 }
 
 function assertPackedDocumentation(archive, packageName) {
@@ -140,6 +116,11 @@ function assertPublishedManifest(manifest) {
   if (JSON.stringify(manifest).includes("workspace:")) {
     throw new Error(`${manifest.name} contains an unresolved workspace dependency`);
   }
+  if ((manifest.bundledDependencies?.length ?? 0) > 0) {
+    throw new Error(
+      `${manifest.name} must use published dependencies instead of bundling packages`,
+    );
+  }
 }
 
 function assertReleasePolicy(manifests) {
@@ -188,7 +169,6 @@ try {
     }
     const publishedManifest = packedManifest(archive);
     assertPublishedManifest(publishedManifest);
-    assertBundledDependencyClosure(archive, publishedManifest);
     assertPackedDocumentation(archive, manifest.name);
     if (manifest.name === "@unigent/cli") {
       assertCliArtifactProfile(archive);
@@ -208,9 +188,17 @@ try {
 
   run(
     "npm",
-    ["install", "--ignore-scripts", "--no-audit", "--no-fund", ...archives.values()],
+    [
+      "install",
+      "--no-audit",
+      "--no-fund",
+      ...archives.values(),
+      "typescript@5.9.3",
+      "@types/node@24.13.2",
+    ],
     consumer,
   );
+  run("npm", ["install", "--no-audit", "--no-fund", "is-number@7.0.0"], consumer);
 
   writeFileSync(
     join(consumer, "index.mjs"),
@@ -243,6 +231,47 @@ if (names.join(",") !== "pi,claude-cli,codex-cli") {
   );
 
   run(process.execPath, ["index.mjs"], consumer);
+  writeFileSync(
+    join(consumer, "strict-consumer.ts"),
+    `import { agent, type AgentRunResult } from "@unigent/sdk";
+import { createScriptedBackend } from "@unigent/sdk/test";
+
+const backend = createScriptedBackend([{ text: "typed-ok" }]);
+const result: AgentRunResult<string> = await agent({
+  name: "strict-consumer",
+  backend,
+  model: "fake",
+}).run("offline");
+
+if (result.output !== "typed-ok") {
+  throw new Error(\`unexpected output: \${result.output}\`);
+}
+`,
+  );
+  writeFileSync(
+    join(consumer, "tsconfig.json"),
+    `${JSON.stringify(
+      {
+        compilerOptions: {
+          module: "NodeNext",
+          moduleResolution: "NodeNext",
+          noEmit: true,
+          skipLibCheck: false,
+          strict: true,
+          target: "ES2024",
+          types: ["node"],
+        },
+        files: ["strict-consumer.ts"],
+      },
+      undefined,
+      2,
+    )}\n`,
+  );
+  run(
+    process.execPath,
+    [join(installedPackagePath(consumer, "typescript"), "bin", "tsc")],
+    consumer,
+  );
   const cliManifest = manifests.get("@unigent/cli");
   if (cliManifest?.bin?.unigent !== "./dist/cli.js") {
     throw new Error("@unigent/cli does not publish the unigent executable");
@@ -255,7 +284,30 @@ if (names.join(",") !== "pi,claude-cli,codex-cli") {
   if (!cliHelp.includes("unigent — run and inspect a Unigent script")) {
     throw new Error("packed @unigent/cli executable did not print its help");
   }
-  process.stdout.write("package validation passed (publint, attw, runtime contract)\n");
+
+  const globalRoot = join(temporaryRoot, "global");
+  mkdirSync(globalRoot);
+  run("npm", [
+    "install",
+    "--global",
+    "--prefix",
+    globalRoot,
+    "--no-audit",
+    "--no-fund",
+    ...archives.values(),
+  ]);
+  const globalCli = join(globalRoot, "bin", "unigent");
+  if (run(globalCli, ["--version"], consumer).trim() !== cliManifest.version) {
+    throw new Error("globally installed @unigent/cli reported the wrong version");
+  }
+  if (
+    !run(globalCli, ["--help"], consumer).includes("unigent — run and inspect a Unigent script")
+  ) {
+    throw new Error("globally installed @unigent/cli did not print its help");
+  }
+  process.stdout.write(
+    "package validation passed (publint, attw, strict consumer, repeat install, runtime, global CLI)\n",
+  );
 } finally {
   run(process.execPath, ["scripts/sync-package-docs.mjs", "--clean"]);
   rmSync(temporaryRoot, { recursive: true, force: true });
