@@ -1,0 +1,23 @@
+{
+  "$schema": "https://turborepo.dev/schema.json",
+  "ui": "stream",
+  "tasks": {
+    "//#typecheck": { "cache": false },
+    "//#format:check": { "cache": false },
+    "//#lint": { "cache": false },
+    "//#lint:types": { "cache": false, "dependsOn": ["//#typecheck"] },
+    "//#arch": { "cache": false },
+    "//#ast": { "cache": false },
+    "//#spell": { "cache": false },
+    "//#deps:check": { "cache": false },
+    "//#audit": { "cache": false },
+    "//#dead": { "cache": false },
+    "//#dup": { "cache": false },
+    "//#docs:check": { "cache": false, "dependsOn": ["//#build"] },
+    "//#package:check": { "cache": false, "dependsOn": ["//#build"] },
+    "//#coverage": { "cache": false, "dependsOn": ["//#build"] },
+    "//#build": { "outputs": ["packages/*/dist/**"] },
+    "api": { "dependsOn": ["//#build"] },
+    "api:check": { "dependsOn": ["//#build"] }
+  }
+}

@@ -1,0 +1,6 @@
+# typos config for the `spell` gate. typos is correction-based: it flags known
+# misspellings rather than unknown domain words, so Unigent needs no allowlist.
+
+[files]
+# Generated / vendored artifacts that are not authored prose.
+extend-exclude = ["pnpm-lock.yaml", "**/*.api.md", "etc/**"]

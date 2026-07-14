@@ -1,0 +1,17 @@
+// Typecheck-only project for test files. The per-package tsconfigs compile
+// `src/**` only (rootDir=src, emit), so without this nothing typechecks
+// `test/**` — vitest transpiles without checking. Run after `tsc -b` so the
+// packages' emitted .d.ts exist for workspace package imports to resolve against.
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "composite": false,
+    "declaration": false,
+    "declarationMap": false,
+    "sourceMap": false,
+    "allowImportingTsExtensions": true,
+    "types": ["node"]
+  },
+  "include": ["packages/*/test/**/*.ts", "packages/*/test/**/*.tsx", "packages/*/vitest.config.ts"]
+}

@@ -1,0 +1,93 @@
+{
+  "name": "@unigent/sdk",
+  "version": "0.1.1",
+  "type": "module",
+  "description": "Cross-harness agent orchestration SDK for TypeScript",
+  "keywords": [
+    "agents",
+    "llm",
+    "ai",
+    "orchestration",
+    "typescript"
+  ],
+  "license": "MIT",
+  "author": "Gintas Zenevskis",
+  "homepage": "https://github.com/gintasz/unigent#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gintasz/unigent.git",
+    "directory": "packages/unigent"
+  },
+  "bugs": "https://github.com/gintasz/unigent/issues",
+  "engines": {
+    "node": ">=24"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./trace": {
+      "types": "./dist/trace.d.ts",
+      "default": "./dist/trace.js"
+    },
+    "./tools": {
+      "types": "./dist/tools.d.ts",
+      "default": "./dist/tools.js"
+    },
+    "./args": {
+      "types": "./dist/args.d.ts",
+      "default": "./dist/args.js"
+    },
+    "./mcp": {
+      "types": "./dist/mcp.d.ts",
+      "default": "./dist/mcp.js"
+    },
+    "./test": {
+      "types": "./dist/test.d.ts",
+      "default": "./dist/test.js"
+    }
+  },
+  "scripts": {
+    "api": "api-extractor run --local --verbose",
+    "api:check": "api-extractor run --verbose",
+    "prepublishOnly": "node ../../scripts/assert-package-docs.mjs"
+  },
+  "dependencies": {
+    "@earendil-works/pi-agent-core": "0.80.2",
+    "@earendil-works/pi-ai": "0.80.2",
+    "@earendil-works/pi-coding-agent": "0.80.2",
+    "@modelcontextprotocol/sdk": "1.29.0",
+    "@standard-schema/spec": "1.1.0",
+    "@unigent/adapter-claude-cli": "workspace:*",
+    "@unigent/adapter-codex-cli": "workspace:*",
+    "@unigent/adapter-pi": "workspace:*",
+    "@unigent/core": "workspace:*",
+    "@unigent/test": "workspace:*",
+    "ajv": "8.17.1",
+    "typebox": "1.1.38"
+  },
+  "bundledDependencies": [
+    "@unigent/adapter-claude-cli",
+    "@unigent/adapter-codex-cli",
+    "@unigent/adapter-pi",
+    "@unigent/core",
+    "@unigent/test"
+  ],
+  "peerDependencies": {
+    "typescript": "5.9.3"
+  },
+  "peerDependenciesMeta": {
+    "typescript": {
+      "optional": true
+    }
+  }
+}

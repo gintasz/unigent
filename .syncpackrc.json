@@ -1,0 +1,21 @@
+{
+  "$schema": "https://raw.githubusercontent.com/JamieMason/syncpack/main/syncpack.schema.json",
+  "indent": "  ",
+  "sortFirst": ["name", "version", "private", "type", "packageManager"],
+  "semverGroups": [
+    {
+      "label": "Pinned, exact versions everywhere (DEP3).",
+      "range": "",
+      "dependencies": ["**"],
+      "packages": ["**"]
+    }
+  ],
+  "versionGroups": [
+    {
+      "label": "Workspace packages use the workspace protocol.",
+      "dependencies": ["@unigent/**"],
+      "dependencyTypes": ["prod", "dev"],
+      "pinVersion": "workspace:*"
+    }
+  ]
+}

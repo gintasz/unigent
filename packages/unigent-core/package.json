@@ -1,0 +1,68 @@
+{
+  "name": "@unigent/core",
+  "version": "0.1.1",
+  "private": true,
+  "type": "module",
+  "description": "Harness-neutral runtime for Unigent agents",
+  "keywords": [
+    "agents",
+    "llm",
+    "ai",
+    "orchestration",
+    "typescript"
+  ],
+  "license": "MIT",
+  "author": "Gintas Zenevskis",
+  "homepage": "https://github.com/gintasz/unigent#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gintasz/unigent.git",
+    "directory": "packages/unigent-core"
+  },
+  "bugs": "https://github.com/gintasz/unigent/issues",
+  "engines": {
+    "node": ">=24"
+  },
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./trace": {
+      "types": "./dist/trace.d.ts",
+      "default": "./dist/trace.js"
+    },
+    "./tools": {
+      "types": "./dist/tools.d.ts",
+      "default": "./dist/tools.js"
+    },
+    "./args": {
+      "types": "./dist/args.d.ts",
+      "default": "./dist/args.js"
+    },
+    "./mcp": {
+      "types": "./dist/mcp.d.ts",
+      "default": "./dist/mcp.js"
+    }
+  },
+  "scripts": {
+    "api": "api-extractor run --local --verbose",
+    "api:check": "api-extractor run --verbose"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.29.0",
+    "@standard-schema/spec": "1.1.0",
+    "ajv": "8.17.1"
+  },
+  "peerDependencies": {
+    "typescript": "5.9.3"
+  },
+  "peerDependenciesMeta": {
+    "typescript": {
+      "optional": true
+    }
+  }
+}

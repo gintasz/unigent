@@ -1,0 +1,25 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "ignoreBinaries": ["scripts/ci-docker.sh", "typos", "claude", "codex"],
+  "ignoreDependencies": ["@arethetypeswrong/cli", "publint"],
+  "ignoreExportsUsedInFile": false,
+  "workspaces": {
+    ".": { "entry": ["examples/*.ts"] },
+    "packages/unigent-e2e": { "entry": ["test/**/*.test.ts"] },
+    "packages/unigent": {
+      "ignoreDependencies": [
+        "@earendil-works/pi-agent-core",
+        "@earendil-works/pi-ai",
+        "@earendil-works/pi-coding-agent",
+        "@modelcontextprotocol/sdk",
+        "@standard-schema/spec",
+        "ajv",
+        "typebox"
+      ]
+    },
+    "packages/unigent-cli": {
+      "entry": ["src/tui.tsx", "src/register.ts", "test/support/*.ts"],
+      "ignoreDependencies": ["@modelcontextprotocol/sdk", "@standard-schema/spec", "ajv"]
+    }
+  }
+}

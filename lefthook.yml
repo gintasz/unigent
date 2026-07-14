@@ -1,0 +1,28 @@
+# Definition-of-Done gate run locally (V1/DOD) so red never reaches the remote.
+# Hooks call the check TIERS defined in package.json — single source of truth, no
+# drift: add a step to a tier and the hooks pick it up automatically.
+#   pre-commit → `check`      (static: typecheck, lint, format:check, lint:types, ast)
+#   pre-push   → `check:full` (everything, incl. arch/deps/dead/spell/dup/coverage/api)
+pre-commit:
+  parallel: false # the staged autofix must run before the static `check` verifies
+  commands:
+    # Autofix + restage staged files first (format/import/lint), so a trivial nit
+    # never blocks the commit. This is the one step that needs per-file granularity.
+    format:
+      priority: 1
+      glob: "*.{ts,js,json}"
+      run: corepack pnpm exec biome check --write --error-on-warnings --no-errors-on-unmatched {staged_files}
+      stage_fixed: true
+    check:
+      priority: 2
+      run: corepack pnpm run check
+    # spell is cheap (~2s), deterministic, and annoying to fix late — gate it at
+    # commit so the agent never leaves a spelling error for the pre-push to surface.
+    spell:
+      priority: 2
+      run: corepack pnpm run spell
+
+pre-push:
+  commands:
+    check:
+      run: corepack pnpm run check:full

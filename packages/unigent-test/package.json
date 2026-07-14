@@ -1,0 +1,43 @@
+{
+  "name": "@unigent/test",
+  "version": "0.1.1",
+  "private": true,
+  "type": "module",
+  "description": "Reusable deterministic backend fixtures for Unigent applications and adapters",
+  "keywords": [
+    "agents",
+    "llm",
+    "ai",
+    "orchestration",
+    "testing",
+    "typescript"
+  ],
+  "license": "MIT",
+  "author": "Gintas Zenevskis",
+  "homepage": "https://github.com/gintasz/unigent#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gintasz/unigent.git",
+    "directory": "packages/unigent-test"
+  },
+  "bugs": "https://github.com/gintasz/unigent/issues",
+  "engines": {
+    "node": ">=24"
+  },
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "api": "api-extractor run --local --verbose",
+    "api:check": "api-extractor run --verbose"
+  },
+  "dependencies": {
+    "@unigent/core": "workspace:*"
+  }
+}

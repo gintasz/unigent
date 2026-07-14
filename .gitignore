@@ -1,0 +1,28 @@
+node_modules/
+dist/
+coverage/
+.env
+.env.*
+!.env.example
+# Playwright MCP scratch (screenshots, snapshots, console logs)
+.playwright-mcp/
+
+.pnpm-store/
+.DS_Store
+**/etc/temp/
+.tsbuildinfo
+worktrees/
+
+.serena/
+.pi/
+.opencode/
+.cursor/
+.claude/*
+!.claude/settings.json
+.codex/*
+!.codex/environments/environment.toml
+
+# Turborepo
+.turbo
+
+.papercuts.jsonl

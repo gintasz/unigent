@@ -1,0 +1,12 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./packages/unigent-core" },
+    { "path": "./packages/unigent-adapter-pi" },
+    { "path": "./packages/unigent-adapter-claudecli" },
+    { "path": "./packages/unigent-adapter-codexcli" },
+    { "path": "./packages/unigent" },
+    { "path": "./packages/unigent-test" },
+    { "path": "./packages/unigent-cli" }
+  ]
+}

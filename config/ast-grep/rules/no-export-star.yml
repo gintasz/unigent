@@ -1,0 +1,9 @@
+id: no-export-star
+language: typescript
+severity: error
+message: "`export *` is banned — each package exposes one curated barrel (J3)."
+files:
+  - "packages/**/src/**/*.ts"
+rule:
+  kind: export_statement
+  regex: "^export \\* from"

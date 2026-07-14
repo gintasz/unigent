@@ -1,0 +1,50 @@
+{
+  "name": "@unigent/adapter-pi",
+  "version": "0.1.1",
+  "private": true,
+  "type": "module",
+  "description": "Unigent backend for the Pi agent SDK",
+  "keywords": [
+    "agents",
+    "llm",
+    "ai",
+    "orchestration",
+    "pi-agent",
+    "typescript"
+  ],
+  "license": "MIT",
+  "author": "Gintas Zenevskis",
+  "homepage": "https://github.com/gintasz/unigent#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gintasz/unigent.git",
+    "directory": "packages/unigent-adapter-pi"
+  },
+  "bugs": "https://github.com/gintasz/unigent/issues",
+  "engines": {
+    "node": ">=24"
+  },
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "api": "api-extractor run --local --verbose",
+    "api:check": "api-extractor run --verbose"
+  },
+  "dependencies": {
+    "@earendil-works/pi-agent-core": "0.80.2",
+    "@earendil-works/pi-ai": "0.80.2",
+    "@earendil-works/pi-coding-agent": "0.80.2",
+    "@unigent/core": "workspace:*",
+    "typebox": "1.1.38"
+  },
+  "devDependencies": {
+    "@unigent/test": "workspace:*"
+  }
+}

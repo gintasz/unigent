@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  pull_request:
+  # Direct pushes to main (e.g. hotfixes that bypass a PR) are gated too, so main
+  # is never left untested. PRs still run the identical gate before merge.
+  push:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      # check:full exercises Bun shebang execution and the standalone example.
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      # typos has no npm build, so put the pinned binary on PATH for check:full's
+      # //#spell task (the local pre-push gate uses a dev-installed typos).
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: typos@1.48.0
+      - run: pnpm install --frozen-lockfile
+      # Single source of truth: the exact gate the pre-push hook runs (lefthook →
+      # check:full). Enumerating the tasks here let CI drift from it (it was missing
+      # audit/docs:check/api:check). One command, no drift.
+      - run: pnpm run check:full
+      # Live Pi/Claude E2E runs separately and needs local harness authentication.

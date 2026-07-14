@@ -1,0 +1,14 @@
+{
+  "name": "@unigent/e2e",
+  "version": "0.1.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:e2e": "vitest run --config vitest.config.ts"
+  },
+  "devDependencies": {
+    "@unigent/sdk": "workspace:*",
+    "vitest": "4.1.8",
+    "zod": "4.4.3"
+  }
+}

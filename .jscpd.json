@@ -1,0 +1,8 @@
+{
+  "threshold": 1,
+  "reporters": ["consoleFull"],
+  "absolute": true,
+  "gitignore": true,
+  "pattern": "packages/unigent*/src/**/*.ts",
+  "ignore": ["**/dist/**", "**/node_modules/**", "**/*.test.ts"]
+}
