@@ -205,6 +205,27 @@ function verifyGlobalCli(releaseRoot, verifyLatest) {
   }
 }
 
+async function retryFreshCacheVerification(releaseRoot, label, operation) {
+  const deadline = Date.now() + PROPAGATION_TIMEOUT_MILLISECONDS;
+  while (true) {
+    const attemptRoot = mkdtempSync(join(releaseRoot, `${label}-`));
+    try {
+      operation(attemptRoot);
+      return;
+    } catch (error) {
+      if (Date.now() >= deadline) {
+        throw error;
+      }
+      process.stdout.write(
+        `${label} verification has not propagated; retrying with a fresh cache\n`,
+      );
+      await sleep(PROPAGATION_POLL_MILLISECONDS);
+    } finally {
+      rmSync(attemptRoot, { recursive: true, force: true });
+    }
+  }
+}
+
 const temporaryRoot = mkdtempSync(join(tmpdir(), "unigent-registry-release-"));
 try {
   const verifyLatest = process.argv.includes("--latest");
@@ -214,8 +235,12 @@ try {
   const manifests = await waitForManifests();
   assertManifestGraph(manifests);
   await sleep(RELEASE_AGE_CLOCK_SKEW_MILLISECONDS);
-  verifyConsumerInstall(temporaryRoot, verifyLatest);
-  verifyGlobalCli(temporaryRoot, verifyLatest);
+  await retryFreshCacheVerification(temporaryRoot, "consumer install", (attemptRoot) =>
+    verifyConsumerInstall(attemptRoot, verifyLatest),
+  );
+  await retryFreshCacheVerification(temporaryRoot, "global CLI install", (attemptRoot) =>
+    verifyGlobalCli(attemptRoot, verifyLatest),
+  );
   process.stdout.write(
     `${verifyLatest ? "latest" : "exact"} registry verification passed for ${releaseVersion}\n`,
   );
