@@ -9,7 +9,6 @@ import type { TuiStore } from "./store.js";
 interface ScriptRunnerOptions {
   readonly runtime: RuntimeInvocation;
   readonly registerEntry: string;
-  readonly developmentLoader: string | undefined;
   readonly sourceFile: string;
   readonly scriptArguments: readonly string[];
 }
@@ -101,15 +100,10 @@ function createScriptRunner(options: ScriptRunnerOptions, store: TuiStore): Scri
     abortRequested = false;
     const currentGeneration = generation;
     store.start();
-    const developmentPreload =
-      options.developmentLoader !== undefined && options.runtime.kind === "node"
-        ? ["--import", options.developmentLoader]
-        : [];
     const child = spawn(
       options.runtime.executable,
       [
         ...options.runtime.arguments,
-        ...developmentPreload,
         "--import",
         options.registerEntry,
         options.sourceFile,
@@ -117,6 +111,7 @@ function createScriptRunner(options: ScriptRunnerOptions, store: TuiStore): Scri
       ],
       {
         env: childProcessEnvironment({
+          FORCE_COLOR: undefined,
           [TRACE_TRANSPORT_ENVIRONMENT_VARIABLE]: "3",
         }),
         stdio: ["ignore", "pipe", "pipe", "pipe"],

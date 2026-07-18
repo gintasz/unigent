@@ -12,6 +12,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const packageRoot = resolve(here, "..");
 const fixture = resolve(here, "support/traced_script.ts");
 const bunFixture = resolve(here, "support/bun_script.ts");
+const nodeTypescriptFixture = resolve(here, "support/node_typescript_script.ts");
 const throwingFixture = resolve(here, "support/throwing_script.ts");
 const throwingWithHandleFixture = resolve(here, "support/throwing_with_handle.ts");
 const signalFixture = resolve(here, "support/signal_script.ts");
@@ -55,7 +56,7 @@ describe("Unigent CLI process integration", () => {
     const exitCode = await exit;
 
     expect(exitCode).toBe(0);
-    expect(stdout).toBe("0.1.7\n");
+    expect(stdout).toBe("0.1.8\n");
   });
 
   it("reports a missing script without a raw ENOENT", async () => {
@@ -108,6 +109,18 @@ describe("Unigent CLI process integration", () => {
 
     expect(exitCode).toBe(0);
     expect(stdout).toContain("SCRIPT OUTPUT: Hello, Ada.");
+  });
+
+  it("resolves a NodeNext TypeScript module graph without a Bun shebang", async () => {
+    const child = spawn(process.execPath, [cli, nodeTypescriptFixture], {
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    const exit = new Promise<number | null>((resolveCode) => child.once("exit", resolveCode));
+    const stdout = child.stdout === null ? "" : await readStream(child.stdout);
+    const exitCode = await exit;
+
+    expect(exitCode).toBe(0);
+    expect(stdout).toBe("TYPESCRIPT MODULE: loaded\nSCRIPT RUNTIME: node\n");
   });
 
   it("honors a Bun shebang in direct mode", async () => {

@@ -346,6 +346,19 @@ if (result.output !== "typed-ok") {
   ) {
     throw new Error("globally installed unigent-cli did not print its help");
   }
+  writeFileSync(
+    join(consumer, "cli-dependency.ts"),
+    'export const marker: string = "global-typescript-ok";\n',
+  );
+  writeFileSync(
+    join(consumer, "cli-entry.ts"),
+    'import { marker } from "./cli-dependency.js";\nprocess.stdout.write(marker + "\\n");\n',
+  );
+  if (
+    run(globalCli, [join(consumer, "cli-entry.ts")], consumer).trim() !== "global-typescript-ok"
+  ) {
+    throw new Error("globally installed unigent-cli did not resolve a NodeNext TypeScript graph");
+  }
   run(globalCli, [join(consumer, "index.mjs")], consumer);
   process.stdout.write(
     "package validation passed (publint, attw, strict consumer, repeat install, runtime, global CLI)\n",

@@ -6,6 +6,12 @@ All notable changes to Unigent are recorded here. This project follows
 
 ## [Unreleased]
 
+## [0.1.8] - 2026-07-18
+
+- Make Bun shebangs optional for project-backed TypeScript by shipping and automatically loading
+  `tsx` whenever the CLI selects Node, with identical behavior in direct, TUI, development, and
+  globally installed execution.
+
 ## [0.1.7] - 2026-07-18
 
 - Expose each backend invocation as a separate trace turn, including automatic repair prompts and
@@ -62,7 +68,8 @@ All notable changes to Unigent are recorded here. This project follows
 
 - Attempted initial release; withdrawn after the SDK package name was rejected.
 
-[Unreleased]: https://github.com/gintasz/unigent/compare/v0.1.7...HEAD
+[Unreleased]: https://github.com/gintasz/unigent/compare/v0.1.8...HEAD
+[0.1.8]: https://github.com/gintasz/unigent/compare/v0.1.7...v0.1.8
 [0.1.7]: https://github.com/gintasz/unigent/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/gintasz/unigent/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/gintasz/unigent/compare/v0.1.4...v0.1.5

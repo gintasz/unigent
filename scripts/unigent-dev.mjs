@@ -8,7 +8,7 @@ const cliSource = fileURLToPath(new URL("../packages/unigent-cli/src/cli.ts", im
 const tsxLoader = import.meta.resolve("tsx");
 const child = spawn(
   process.execPath,
-  ["--import", tsxLoader, cliSource, `--developmentLoader=${tsxLoader}`, ...process.argv.slice(2)],
+  ["--import", tsxLoader, cliSource, ...process.argv.slice(2)],
   {
     stdio: "inherit",
   },

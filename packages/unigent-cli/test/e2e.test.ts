@@ -20,6 +20,7 @@ const failingFixture = resolve(here, "support/failing_script.ts");
 const positionalFixture = resolve(here, "support/positional_script.ts");
 const rawArgumentsFixture = resolve(here, "support/raw_arguments_script.ts");
 const bunFixture = resolve(here, "support/bun_script.ts");
+const nodeTypescriptFixture = resolve(here, "support/node_typescript_script.ts");
 const interactiveFixture = resolve(here, "support/interactive_script.ts");
 const screenshotDirectory = resolve(tmpdir(), "unigent-tui-shots");
 const terminal = createTerminal({ backend: createXtermBackend(), cols: 120, rows: 34 });
@@ -220,6 +221,19 @@ test("honors a Bun shebang through the TUI", async () => {
     await bunTerminal.waitFor("SCRIPT RUNTIME: bun", 5000);
   } finally {
     await bunTerminal.close();
+  }
+});
+
+test("runs a NodeNext TypeScript module graph without a Bun shebang through the TUI", async () => {
+  const nodeTerminal = createTerminal({ backend: createXtermBackend(), cols: 100, rows: 28 });
+  try {
+    await nodeTerminal.spawn([process.execPath, cli, "tui", nodeTypescriptFixture]);
+    await nodeTerminal.waitFor("● complete", 5000);
+    nodeTerminal.press("o");
+    await nodeTerminal.waitFor("TYPESCRIPT MODULE: loaded", 5000);
+    expect(nodeTerminal.screen.getText()).toContain("SCRIPT RUNTIME: node");
+  } finally {
+    await nodeTerminal.close();
   }
 });
 

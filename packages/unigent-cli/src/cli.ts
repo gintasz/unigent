@@ -28,24 +28,9 @@ generators is accepted but not required because Unigent stops parsing at <file>.
 honored. -i prompts for missing schema input when running a script. TUI mode requires Bun and does
 not support -i.
 `;
-const DEVELOPMENT_LOADER_PREFIX = "--developmentLoader=";
+const TYPESCRIPT_LOADER = import.meta.resolve("tsx");
 const SIGNAL_EXIT_CODE_BASE = 128;
 const INTERRUPTED_EXIT_CODE = 130;
-
-interface InternalArguments {
-  readonly developmentLoader: string | undefined;
-  readonly commandArguments: readonly string[];
-}
-
-function parseInternalArguments(arguments_: readonly string[]): InternalArguments {
-  const [first, ...remaining] = arguments_;
-  return first?.startsWith(DEVELOPMENT_LOADER_PREFIX) === true
-    ? {
-        developmentLoader: first.slice(DEVELOPMENT_LOADER_PREFIX.length),
-        commandArguments: remaining,
-      }
-    : { developmentLoader: undefined, commandArguments: arguments_ };
-}
 
 function packageEntry(name: "register" | "tui"): string {
   const here = dirname(fileURLToPath(import.meta.url));
@@ -95,22 +80,15 @@ async function spawnExitCode(executable: string, arguments_: readonly string[]):
   });
 }
 
-async function execute(
-  command: RunCommand,
-  developmentLoader: string | undefined,
-): Promise<number> {
+async function execute(command: RunCommand): Promise<number> {
   const runtime = runtimeInvocation(
     await detectScriptRuntime(command.sourceFile),
     process.execPath,
+    TYPESCRIPT_LOADER,
   );
-  const developmentPreload =
-    developmentLoader !== undefined && runtime.kind === "node"
-      ? ["--import", developmentLoader]
-      : [];
   if (command.mode === "run") {
     return await spawnExitCode(runtime.executable, [
       ...runtime.arguments,
-      ...developmentPreload,
       "--import",
       packageEntry("register"),
       command.sourceFile,
@@ -124,7 +102,7 @@ async function execute(
     process.execPath,
     "--register",
     packageEntry("register"),
-    ...(developmentLoader === undefined ? [] : [`--developmentLoader=${developmentLoader}`]),
+    `--typescriptLoader=${TYPESCRIPT_LOADER}`,
     command.sourceFile,
     "--",
     ...command.scriptArguments,
@@ -133,8 +111,7 @@ async function execute(
 
 async function main(): Promise<number> {
   assertSupportedNodeVersion(process.versions.node);
-  const internal = parseInternalArguments(process.argv.slice(2));
-  const parsed = parseCommand(internal.commandArguments, process.cwd());
+  const parsed = parseCommand(process.argv.slice(2), process.cwd());
   if (parsed.kind === "help") {
     process.stdout.write(HELP);
     return 0;
@@ -147,7 +124,7 @@ async function main(): Promise<number> {
     process.stdout.write(`${bakeSourceTools(parsed.command.sourceFile)}\n`);
     return 0;
   }
-  return await execute(parsed.command, internal.developmentLoader);
+  return await execute(parsed.command);
 }
 
 main().then(

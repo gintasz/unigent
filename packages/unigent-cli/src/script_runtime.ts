@@ -30,10 +30,18 @@ async function detectScriptRuntime(sourceFile: string): Promise<ScriptRuntime> {
   }
 }
 
-function runtimeInvocation(runtime: ScriptRuntime, nodeExecutable: string): RuntimeInvocation {
+function runtimeInvocation(
+  runtime: ScriptRuntime,
+  nodeExecutable: string,
+  typescriptLoader: string,
+): RuntimeInvocation {
   return runtime === "bun"
     ? { kind: runtime, executable: "bun", arguments: ["--install=fallback"] }
-    : { kind: runtime, executable: nodeExecutable, arguments: [] };
+    : {
+        kind: runtime,
+        executable: nodeExecutable,
+        arguments: ["--import", typescriptLoader],
+      };
 }
 
 export type { RuntimeInvocation, ScriptRuntime };

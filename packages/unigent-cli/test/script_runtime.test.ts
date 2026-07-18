@@ -33,15 +33,15 @@ describe("script runtime selection", () => {
   });
 
   it("enables Bun fallback installation for package-free scripts", () => {
-    expect(runtimeInvocation("bun", "/path/to/node")).toEqual({
+    expect(runtimeInvocation("bun", "/path/to/node", "/path/to/tsx")).toEqual({
       kind: "bun",
       executable: "bun",
       arguments: ["--install=fallback"],
     });
-    expect(runtimeInvocation("node", "/path/to/node")).toEqual({
+    expect(runtimeInvocation("node", "/path/to/node", "/path/to/tsx")).toEqual({
       kind: "node",
       executable: "/path/to/node",
-      arguments: [],
+      arguments: ["--import", "/path/to/tsx"],
     });
   });
 

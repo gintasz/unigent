@@ -16,7 +16,7 @@ const TUI_ARGUMENTS = {
   options: {
     node: { type: "string" },
     register: { type: "string" },
-    developmentLoader: { type: "string" },
+    typescriptLoader: { type: "string" },
     theme: { type: "string" },
   },
 } as const;
@@ -40,12 +40,21 @@ async function detectTheme(
 async function main(): Promise<void> {
   const { values, positionals } = parseArgs(TUI_ARGUMENTS);
   const [source] = positionals;
-  if (source === undefined || values.node === undefined || values.register === undefined) {
+  if (
+    source === undefined ||
+    values.node === undefined ||
+    values.register === undefined ||
+    values.typescriptLoader === undefined
+  ) {
     throw new Error("unigent tui: internal launch arguments are incomplete");
   }
   const sourceFile = isAbsolute(source) ? source : resolve(process.cwd(), source);
   const scriptArguments = positionals.slice(1);
-  const runtime = runtimeInvocation(await detectScriptRuntime(sourceFile), values.node);
+  const runtime = runtimeInvocation(
+    await detectScriptRuntime(sourceFile),
+    values.node,
+    values.typescriptLoader,
+  );
   const store = createTuiStore(sourceFile);
   const renderer = await createCliRenderer({ useMouse: true, exitOnCtrlC: false, targetFps: 30 });
   const theme = await detectTheme(values.theme, renderer);
@@ -54,7 +63,6 @@ async function main(): Promise<void> {
     {
       runtime,
       registerEntry: values.register,
-      developmentLoader: values.developmentLoader,
       sourceFile,
       scriptArguments,
     },
