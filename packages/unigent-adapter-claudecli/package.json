@@ -1,6 +1,6 @@
 {
   "name": "@unigent/adapter-claude-cli",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "private": true,
   "type": "module",
   "description": "Unigent backend for the installed Claude CLI",

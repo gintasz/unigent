@@ -15,6 +15,7 @@ const helloExample = resolve(packageRoot, "../../examples/hello.ts");
 const fixture = resolve(here, "support/traced_script.ts");
 const toolFixture = resolve(here, "support/tool_script.ts");
 const stressFixture = resolve(here, "support/stress_script.ts");
+const longMessageFixture = resolve(here, "support/long_message_script.ts");
 const failingFixture = resolve(here, "support/failing_script.ts");
 const positionalFixture = resolve(here, "support/positional_script.ts");
 const rawArgumentsFixture = resolve(here, "support/raw_arguments_script.ts");
@@ -138,6 +139,24 @@ test("stays responsive through 5000 agent runs", async () => {
     await stressTerminal.close();
   }
 }, 75_000);
+
+test("displays complete messages longer than the former character limit", async () => {
+  const longMessageTerminal = createTerminal({
+    backend: createXtermBackend(),
+    cols: 100,
+    rows: 28,
+  });
+  try {
+    await longMessageTerminal.spawn([process.execPath, cli, "tui", longMessageFixture]);
+    await longMessageTerminal.waitFor("● complete", 10_000);
+    longMessageTerminal.wheel(0, 200, { x: 75, y: 12 });
+    await longMessageTerminal.waitForStable(250, 5000);
+    expect(longMessageTerminal.screen.getText()).toContain("COMPLETE-TAIL");
+    expect(longMessageTerminal.screen.getText()).not.toContain("more characters");
+  } finally {
+    await longMessageTerminal.close();
+  }
+});
 
 test("shows startup failures without requiring the output hotkey", async () => {
   const failingTerminal = createTerminal({ backend: createXtermBackend(), cols: 100, rows: 28 });

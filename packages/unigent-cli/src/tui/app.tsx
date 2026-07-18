@@ -35,7 +35,6 @@ const MINIMUM_WIDTH = 68;
 const MINIMUM_HEIGHT = 12;
 const TRACE_WIDTH_RATIO = 0.36;
 const TRACE_MINIMUM_WIDTH = 27;
-const ENTRY_CHARACTER_LIMIT = 8000;
 const TRACE_PAGE_SIZE = 250;
 const ACTIVITY_ENTRY_LIMIT = 250;
 const DIAGNOSTIC_ENTRY_LIMIT = 20;
@@ -230,7 +229,7 @@ function useAppKeyboard(bindings: KeyboardBindings): void {
   });
 }
 
-function trimBlock(value: unknown): string {
+function formatBlock(value: unknown): string {
   let text: string;
   if (typeof value === "string") {
     text = value;
@@ -241,9 +240,7 @@ function trimBlock(value: unknown): string {
       text = String(value);
     }
   }
-  return text.length <= ENTRY_CHARACTER_LIMIT
-    ? text
-    : `${text.slice(0, ENTRY_CHARACTER_LIMIT)}\n… ${text.length - ENTRY_CHARACTER_LIMIT} more characters`;
+  return text;
 }
 
 function rowKindAppearance(row: TreeRow, palette: Palette): { color: string; glyph: string } {
@@ -357,7 +354,7 @@ function SelectionDetails(props: {
           <box key={`${diagnostic.label}-${index}`} flexDirection="column" paddingTop={1}>
             <text fg={diagnosticColor(diagnostic, palette)}>{diagnostic.label}</text>
             <text fg={palette.foreground} wrapMode="word">
-              {trimBlock(diagnostic.value)}
+              {formatBlock(diagnostic.value)}
             </text>
           </box>
         ),
@@ -417,7 +414,7 @@ function Entry(props: {
     >
       <text fg={color}>{header}</text>
       <text fg={entry.kind === "reasoning" ? palette.muted : palette.foreground} wrapMode="word">
-        {trimBlock(body)}
+        {formatBlock(body)}
       </text>
     </box>
   );
@@ -435,7 +432,7 @@ function OutputBlock(props: {
     <box flexDirection="column" paddingLeft={1} paddingRight={1} marginBottom={1}>
       <text fg={props.color}>{props.title}</text>
       <text fg={props.color} wrapMode="word">
-        {trimBlock(props.content.trimEnd())}
+        {formatBlock(props.content.trimEnd())}
       </text>
     </box>
   );

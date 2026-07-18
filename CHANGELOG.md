@@ -6,6 +6,11 @@ All notable changes to Unigent are recorded here. This project follows
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-07-18
+
+- Display complete TUI activity, diagnostic, and output blocks instead of hiding content beyond
+  8,000 characters.
+
 ## [0.1.5] - 2026-07-16
 
 - Add explicit `-i` argument collection for direct terminal runs, with schema-driven prompts,
@@ -50,7 +55,8 @@ All notable changes to Unigent are recorded here. This project follows
 
 - Attempted initial release; withdrawn after the SDK package name was rejected.
 
-[Unreleased]: https://github.com/gintasz/unigent/compare/v0.1.5...HEAD
+[Unreleased]: https://github.com/gintasz/unigent/compare/v0.1.6...HEAD
+[0.1.6]: https://github.com/gintasz/unigent/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/gintasz/unigent/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/gintasz/unigent/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/gintasz/unigent/compare/v0.1.2...v0.1.3
