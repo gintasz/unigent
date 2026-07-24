@@ -22,48 +22,47 @@
 
 <p align="center"><a href="https://github.com/gintasz/unigent/tree/main/examples">Examples</a></p>
 
-## Install
+---
 
-Unigent requires Node.js 24 or newer.
-The live trace inspector (`unigent tui`) additionally requires [Bun](https://bun.sh/).
-Published packages are ESM-only.
+## Why Unigent?
+
+The agent CLIs you already have installed — Pi, Claude Code, Codex — are powerful, but each has its
+own API, its own session model, and no way to get a typed value back. Unigent puts one TypeScript
+surface over all of them.
+
+- **🔀 One API, every harness.** Write your workflow once against Pi, Claude Code, or Codex CLI.
+  Swap the backend with a one-line change; the agent, tools, sessions, and structured outputs stay
+  the same.
+- **🧠 Deterministic host, fuzzy agent.** Orchestration — control flow, branching, parallelism,
+  recursion — lives in your TypeScript, where it is testable and reviewable. The model is invoked
+  only for genuinely fuzzy work: judgment and language.
+- **📦 Typed structured outputs, never scraped from prose.** Ask a run for a [Zod](https://zod.dev/) (or any
+  [Standard Schema](https://standardschema.dev/)) value and get back the inferred TypeScript type
+  through a reserved completion tool. Markdown preambles and trailing commentary cannot corrupt
+  the value.
+- **🧩 Agents are ordinary functions.** A tool is a named function; a nested agent is a function
+  that calls `.run()`. Composition, error handling, and testing are plain `async`/`await` and
+  `try`/`catch` — no new runtime to learn.
+- **🌳 Built for real workflows.** Sessions keep conversation context, forks branch it in parallel,
+  scopes group runs with budgets and deadlines, and checkpoints reuse finished work across reruns.
+- **🔍 See everything that happened.** Every run returns a full trace — nested runs, tool calls,
+  prompts, usage, cost — and the `unigent tui` inspector renders the live run tree as it happens.
+
+---
+
+## Quickstart
+
+> **Prerequisites:** Node.js **24 or newer**, plus at least one authenticated harness:
+> [Pi](https://github.com/earendil-works/pi) configured locally, or the official Claude Code /
+> Codex CLIs installed and signed in. The live trace inspector (`unigent tui`) additionally
+> requires [Bun](https://bun.sh/). Published packages are ESM-only.
 
 ```bash
 npm install unigent-sdk zod
 npm install -g unigent-cli
 ```
 
-The examples below use [Zod](https://zod.dev/), but Unigent accepts any
-[Standard Schema](https://standardschema.dev/) validator.
-
-### Drop-in Bun scripts
-
-For small automations, a single Bun script is often more comfortable than adding a `package.json`,
-lockfile, and local dependencies to a project. Start the file with `#!/usr/bin/env bun`; Unigent's
-CLI will use Bun in both normal and TUI mode, with missing-package fallback enabled. Imports are
-downloaded into Bun's global cache instead of creating project boilerplate.
-
-Copy [examples/standalone.ts](https://github.com/gintasz/unigent/blob/main/examples/standalone.ts)
-into a project and launch it through Unigent:
-
-```bash
-unigent standalone.ts "Write a launch announcement"
-unigent tui standalone.ts "Write a launch announcement"
-```
-
-The same file is directly executable when you do not need Unigent's trace transport or TUI:
-
-```bash
-chmod +x standalone.ts
-./standalone.ts "Write a launch announcement"
-```
-
-Pi reads models and authentication from your local Pi configuration. The Claude and Codex
-adapters use the authenticated official CLIs installed on your machine.
-
-👉 Your agent can invoke such workflow scripts with a bash command, isn't that cool?
-
-## Your first agent
+Write your first agent:
 
 ```typescript
 import { agent, piAgent } from "unigent-sdk";
@@ -82,10 +81,80 @@ console.log(result.output);
 starts immediately, can be aborted, and exposes its events as an async iterable while you await the
 final result.
 
+Run it through the CLI to get live traces:
+
+```bash
+unigent your-script.ts "your prompt"
+unigent tui your-script.ts "your prompt"   # live trace inspector
+```
+
 See [`examples/hello.ts`](https://github.com/gintasz/unigent/blob/main/examples/hello.ts) for the
 smallest complete script and
-[`examples/pitch.ts`](https://github.com/gintasz/unigent/blob/main/examples/pitch.ts) for a workflow
-using most of the API.
+[`examples/pitch.ts`](https://github.com/gintasz/unigent/blob/main/examples/pitch.ts) for a
+workflow using most of the API.
+
+---
+
+## The mental model
+
+Unigent is a small set of building blocks. Everything else on this page is detail about one of
+them.
+
+```
+  agent ──▶ run(prompt [, schema]) ──▶ result { output, usage, trace }
+    │            ▲
+    │            └── prose · Standard Schema value · done · fail
+    ├── backend: piAgent() · claudeCli() · codexCli()  (the harness adapter)
+    ├── tools: [yourFunction]        (opt-in; nothing callable unless listed)
+    ├── session() ──▶ fork()         (keep context, branch it in parallel)
+    ├── scope(name)                  (group runs: usage, traces, budget, deadline)
+    └── checkpoint                   (reuse finished runs across reruns)
+```
+
+- **Agent** — a named, configured worker: a backend (harness adapter), a model, and optional
+  tools, system prompt, and limits.
+- **Run** — one prompt through the harness. Stateless by default; returns prose, a typed
+  structured value, or `void` for side-effect work (`done`).
+- **Tool** — an ordinary TypeScript function the agent may call. Only functions listed in `tools`
+  are callable — capability security, nothing is exposed by default.
+- **Session & fork** — a session keeps the harness conversation for later turns; a fork branches
+  it so parallel reviewers reuse gathered context instead of paying to rebuild it.
+- **Scope** — a named workflow boundary owning cumulative usage, traces, annotations,
+  cancellation, budget, and a deadline.
+- **Checkpoint** — a fingerprinted record of a successful stateless run, replayed on reruns so
+  finished steps don't bill again.
+- **Trace** — one structured, append-only event log per run: nested runs, tools, prompts, output,
+  usage, checkpoints, and errors under a single trace identity.
+
+How the pieces sit together:
+
+```
++------------------+        +-------------------+
+|   unigent CLI    |        |    unigent tui    |
+|  (runs script)   |        | (live inspector)  |
++--------+---------+        +---------+---------+
+         |                            ^
+         | spawns                     | trace events (isolated channel)
+         v                            |
++-------------------------------------+----------+
+|            your TypeScript script              |
+|        agent / run / session / scope           |
++------------------------+-----------------------+
+                         |
+              +----------v----------+
+              |   harness adapter   |
+              +--+--------+--------+-+
+                 |        |        |
+          +------v-+ +----v-----+ +-v---------+
+          | Pi SDK | | Claude   | | Codex CLI |
+          |        | | CLI      | |           |
+          +--------+ +----------+ +-----------+
+```
+
+The SDK talks to each harness through a small adapter that opens sessions, runs turns, executes
+Unigent tools, streams events, reports usage, and forks conversations where supported.
+
+---
 
 ## Choose what comes back
 
@@ -305,6 +374,33 @@ output.
 
 The trace retains its complete history in 250-row pages, and the activity pane keeps only its latest
 250 entries mounted. Both panes use viewport culling so off-screen content is not painted.
+
+### Drop-in Bun scripts
+
+For small automations, a single Bun script is often more comfortable than adding a `package.json`,
+lockfile, and local dependencies to a project. Start the file with `#!/usr/bin/env bun`; Unigent's
+CLI will use Bun in both normal and TUI mode, with missing-package fallback enabled. Imports are
+downloaded into Bun's global cache instead of creating project boilerplate.
+
+Copy [examples/standalone.ts](https://github.com/gintasz/unigent/blob/main/examples/standalone.ts)
+into a project and launch it through Unigent:
+
+```bash
+unigent standalone.ts "Write a launch announcement"
+unigent tui standalone.ts "Write a launch announcement"
+```
+
+The same file is directly executable when you do not need Unigent's trace transport or TUI:
+
+```bash
+chmod +x standalone.ts
+./standalone.ts "Write a launch announcement"
+```
+
+Pi reads models and authentication from your local Pi configuration. The Claude and Codex
+adapters use the authenticated official CLIs installed on your machine.
+
+👉 Your agent can invoke such workflow scripts with a bash command, isn't that cool?
 
 ## Parse script arguments
 
