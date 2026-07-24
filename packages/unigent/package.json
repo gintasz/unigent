@@ -1,6 +1,6 @@
 {
   "name": "unigent-sdk",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "type": "module",
   "description": "Cross-harness agent orchestration SDK for TypeScript",
   "keywords": [

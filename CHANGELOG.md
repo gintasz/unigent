@@ -6,6 +6,14 @@ All notable changes to Unigent are recorded here. This project follows
 
 ## [Unreleased]
 
+## [0.1.9] - 2026-07-24
+
+- Rewrite the README for fresh readers: a "Why Unigent?" overview, a quickstart with explicit
+  prerequisites, a mental-model map of agents, runs, tools, sessions, scopes, checkpoints, and
+  traces, and an architecture diagram, while keeping the full API reference intact.
+- Override vulnerable transitive dependencies (`brace-expansion`, `fast-uri`, `linkify-it`) to
+  releases that fix their high-severity advisories.
+
 ## [0.1.8] - 2026-07-18
 
 - Make Bun shebangs optional for project-backed TypeScript by shipping and automatically loading
@@ -68,7 +76,8 @@ All notable changes to Unigent are recorded here. This project follows
 
 - Attempted initial release; withdrawn after the SDK package name was rejected.
 
-[Unreleased]: https://github.com/gintasz/unigent/compare/v0.1.8...HEAD
+[Unreleased]: https://github.com/gintasz/unigent/compare/v0.1.9...HEAD
+[0.1.9]: https://github.com/gintasz/unigent/compare/v0.1.8...v0.1.9
 [0.1.8]: https://github.com/gintasz/unigent/compare/v0.1.7...v0.1.8
 [0.1.7]: https://github.com/gintasz/unigent/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/gintasz/unigent/compare/v0.1.5...v0.1.6
