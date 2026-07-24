@@ -31,7 +31,12 @@
   "pnpm": {
     "onlyBuiltDependencies": [
       "node-pty"
-    ]
+    ],
+    "overrides": {
+      "brace-expansion": ">=5.0.7",
+      "fast-uri": ">=3.1.4",
+      "linkify-it": "~5.0.2"
+    }
   },
   "scripts": {
     "build": "tsc -b && corepack pnpm --filter unigent-sdk run build:bundle && corepack pnpm --filter unigent-cli run build:bundle",
