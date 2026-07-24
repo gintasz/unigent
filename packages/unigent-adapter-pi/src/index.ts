@@ -18,13 +18,12 @@ import type {
   Usage,
 } from "@earendil-works/pi-ai";
 import {
-  AuthStorage,
   createAgentSession,
   DefaultResourceLoader,
   type Extension,
   getAgentDir,
   type LoadExtensionsResult,
-  ModelRegistry,
+  ModelRuntime,
   type ResourceDiagnostic,
   type ResourceLoader,
   SettingsManager,
@@ -65,7 +64,7 @@ interface PiAgentOptions {
 
 interface PiWiring {
   readonly streamFn: StreamFn;
-  readonly registry?: ModelRegistry;
+  readonly modelRuntime?: ModelRuntime;
   readonly basePrompt: string | undefined;
   readonly nativeTools: readonly AgentTool[];
 }
@@ -262,11 +261,11 @@ async function resourceLoader(options: PiAgentOptions): Promise<ResourceLoader> 
   return loader;
 }
 
-function resolveModel(registry: ModelRegistry | undefined, id: string): Model<Api> | undefined {
+function resolveModel(modelRuntime: ModelRuntime | undefined, id: string): Model<Api> | undefined {
   const separator = id.indexOf("/");
   const provider = separator < 0 ? id : id.slice(0, separator);
   const name = separator < 0 ? id : id.slice(separator + 1);
-  return registry?.find(provider, name);
+  return modelRuntime?.getModel(provider, name);
 }
 
 async function buildWiring(options: PiAgentOptions): Promise<PiWiring> {
@@ -282,18 +281,18 @@ async function buildWiring(options: PiAgentOptions): Promise<PiWiring> {
       nativeTools: options.tools ?? [],
     };
   }
-  const registry = ModelRegistry.create(AuthStorage.create());
-  registry.refresh();
+  const modelRuntime = await ModelRuntime.create();
   const loader = await resourceLoader(options);
-  const seed = registry.getAvailable()[0] ?? registry.getAll()[0];
+  const availableModels = await modelRuntime.getAvailable();
+  const seed = availableModels[0] ?? modelRuntime.getModels()[0];
   const { session } = await createAgentSession({
-    modelRegistry: registry,
+    modelRuntime,
     resourceLoader: loader,
     ...(seed === undefined ? {} : { model: seed }),
   });
   return {
-    streamFn: session.agent.streamFn,
-    registry,
+    streamFn: session.agent.streamFunction,
+    modelRuntime,
     basePrompt: options.basePrompt ?? session.agent.state.systemPrompt,
     nativeTools: options.tools ?? session.agent.state.tools,
   };
@@ -320,7 +319,7 @@ function makeSession(
     if (active === undefined) {
       active = new PiCoreAgent({
         initialState: { systemPrompt, model, thinkingLevel: thinking, tools },
-        streamFn: wiring.streamFn,
+        streamFunction: wiring.streamFn,
         convertToLlm: (messages: AgentMessage[]): Message[] =>
           messages.filter(
             (message): message is Message =>
@@ -414,7 +413,7 @@ export function piAgent(options: PiAgentOptions = {}): Backend {
         resolvedWiring.nativeTools.map((tool) => tool.name),
       );
       const model =
-        options.resolveModel?.(modelId) ?? resolveModel(resolvedWiring.registry, modelId);
+        options.resolveModel?.(modelId) ?? resolveModel(resolvedWiring.modelRuntime, modelId);
       if (model === undefined) {
         throw new AgentBackendRejectedError(`unknown Pi model: ${modelId}`);
       }

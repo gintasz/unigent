@@ -6,6 +6,13 @@ All notable changes to Unigent are recorded here. This project follows
 
 ## [Unreleased]
 
+## [0.1.10] - 2026-07-24
+
+- Upgrade the pinned Pi dependencies to `0.81.0`, whose published shrinkwrap resolves the fixed
+  `brace-expansion`, so clean npm consumers pass the high-severity audit.
+- Audit the packed SDK and CLI as a clean npm consumer before publishing, preventing a failed
+  post-publish audit from leaving an unverified release on the registry.
+
 ## [0.1.9] - 2026-07-24
 
 - Rewrite the README for fresh readers: a "Why Unigent?" overview, a quickstart with explicit
@@ -76,7 +83,8 @@ All notable changes to Unigent are recorded here. This project follows
 
 - Attempted initial release; withdrawn after the SDK package name was rejected.
 
-[Unreleased]: https://github.com/gintasz/unigent/compare/v0.1.9...HEAD
+[Unreleased]: https://github.com/gintasz/unigent/compare/v0.1.10...HEAD
+[0.1.10]: https://github.com/gintasz/unigent/compare/v0.1.9...v0.1.10
 [0.1.9]: https://github.com/gintasz/unigent/compare/v0.1.8...v0.1.9
 [0.1.8]: https://github.com/gintasz/unigent/compare/v0.1.7...v0.1.8
 [0.1.7]: https://github.com/gintasz/unigent/compare/v0.1.6...v0.1.7

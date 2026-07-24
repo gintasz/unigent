@@ -1,6 +1,6 @@
 {
   "name": "@unigent/adapter-pi",
-  "version": "0.1.9",
+  "version": "0.1.10",
   "private": true,
   "type": "module",
   "description": "Unigent backend for the Pi agent SDK",
@@ -44,9 +44,9 @@
     "prepublishOnly": "node ../../scripts/assert-package-docs.mjs"
   },
   "dependencies": {
-    "@earendil-works/pi-agent-core": "0.80.2",
-    "@earendil-works/pi-ai": "0.80.2",
-    "@earendil-works/pi-coding-agent": "0.80.2",
+    "@earendil-works/pi-agent-core": "0.81.0",
+    "@earendil-works/pi-ai": "0.81.0",
+    "@earendil-works/pi-coding-agent": "0.81.0",
     "@unigent/core": "workspace:*",
     "typebox": "1.1.38"
   },

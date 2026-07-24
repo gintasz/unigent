@@ -228,13 +228,19 @@ try {
       "install",
       "--no-audit",
       "--no-fund",
+      "--min-release-age=0",
       ...archives.values(),
       "typescript@5.9.3",
       "@types/node@24.13.2",
     ],
     consumer,
   );
-  run("npm", ["install", "--no-audit", "--no-fund", "is-number@7.0.0"], consumer);
+  run(
+    "npm",
+    ["install", "--no-audit", "--no-fund", "--min-release-age=0", "is-number@7.0.0"],
+    consumer,
+  );
+  run("npm", ["audit", "--audit-level=high"], consumer);
 
   writeFileSync(
     join(consumer, "index.mjs"),
@@ -335,6 +341,7 @@ if (result.output !== "typed-ok") {
     globalRoot,
     "--no-audit",
     "--no-fund",
+    "--min-release-age=0",
     ...archives.values(),
   ]);
   const globalCli = join(globalRoot, "bin", "unigent");
@@ -361,7 +368,7 @@ if (result.output !== "typed-ok") {
   }
   run(globalCli, [join(consumer, "index.mjs")], consumer);
   process.stdout.write(
-    "package validation passed (publint, attw, strict consumer, repeat install, runtime, global CLI)\n",
+    "package validation passed (publint, attw, audit, strict consumer, repeat install, runtime, global CLI)\n",
   );
 } finally {
   run(process.execPath, ["scripts/sync-package-docs.mjs", "--clean"]);

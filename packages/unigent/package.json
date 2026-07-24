@@ -1,6 +1,6 @@
 {
   "name": "unigent-sdk",
-  "version": "0.1.9",
+  "version": "0.1.10",
   "type": "module",
   "description": "Cross-harness agent orchestration SDK for TypeScript",
   "keywords": [
@@ -63,9 +63,9 @@
     "prepublishOnly": "node ../../scripts/assert-package-docs.mjs"
   },
   "dependencies": {
-    "@earendil-works/pi-agent-core": "0.80.2",
-    "@earendil-works/pi-ai": "0.80.2",
-    "@earendil-works/pi-coding-agent": "0.80.2",
+    "@earendil-works/pi-agent-core": "0.81.0",
+    "@earendil-works/pi-ai": "0.81.0",
+    "@earendil-works/pi-coding-agent": "0.81.0",
     "@modelcontextprotocol/sdk": "1.29.0",
     "@standard-schema/spec": "1.1.0",
     "ajv": "8.20.0",

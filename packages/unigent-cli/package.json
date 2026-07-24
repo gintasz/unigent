@@ -1,6 +1,6 @@
 {
   "name": "unigent-cli",
-  "version": "0.1.9",
+  "version": "0.1.10",
   "type": "module",
   "description": "Node.js script runner and Bun-powered live trace inspector for Unigent",
   "keywords": [
