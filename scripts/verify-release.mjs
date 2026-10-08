@@ -5,8 +5,8 @@ import process from "node:process";
 import { releasePackages, releaseVersion, run } from "./release-packages.mjs";
 
 const REGISTRY_ROOT = "https://registry.npmjs.org";
-const PROPAGATION_TIMEOUT_MILLISECONDS = 60_000;
-const PROPAGATION_POLL_MILLISECONDS = 5000;
+const PROPAGATION_TIMEOUT_MILLISECONDS = 15 * 60_000;
+const PROPAGATION_POLL_MILLISECONDS = 10_000;
 const RELEASE_AGE_CLOCK_SKEW_MILLISECONDS = 5000;
 
 function sleep(milliseconds) {

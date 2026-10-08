@@ -1,7 +1,15 @@
+import { spawnSync } from "node:child_process";
 import process from "node:process";
 import { releasePackages, releaseVersion, run } from "./release-packages.mjs";
 
 const REGISTRY_ROOT = "https://registry.npmjs.org";
+const STAGED_VERSION_TIMEOUT_MILLISECONDS = 15 * 60_000;
+const STAGED_VERSION_POLL_MILLISECONDS = 10_000;
+const STAGED_VERSION_CONFLICT_PATTERN = /previously staged version|cannot publish over/i;
+
+function sleep(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
 
 async function fetchPackument(packageName) {
   const response = await fetch(
@@ -17,23 +25,26 @@ async function fetchPackument(packageName) {
   return response.json();
 }
 
-run("corepack", ["pnpm", "run", "build"]);
-run("corepack", ["pnpm", "run", "package:check"]);
-
-try {
-  run(process.execPath, ["scripts/sync-package-docs.mjs"]);
-  for (const packageName of releasePackages) {
+async function waitForStagedVersion(packageName) {
+  const deadline = Date.now() + STAGED_VERSION_TIMEOUT_MILLISECONDS;
+  while (true) {
     const packument = await fetchPackument(packageName);
     if (packument?.versions?.[releaseVersion] !== undefined) {
-      if (packument["dist-tags"]?.latest !== releaseVersion) {
-        throw new Error(
-          `${packageName}@${releaseVersion} exists but is not latest; recover its dist-tag manually`,
-        );
-      }
-      process.stdout.write(`publish: ${packageName}@${releaseVersion} already latest\n`);
-      continue;
+      return;
     }
-    run("corepack", [
+    if (Date.now() >= deadline) {
+      throw new Error(
+        `staged ${packageName}@${releaseVersion} did not become readable within 15 minutes`,
+      );
+    }
+    await sleep(STAGED_VERSION_POLL_MILLISECONDS);
+  }
+}
+
+async function publishPackage(packageName) {
+  const result = spawnSync(
+    "corepack",
+    [
       "pnpm",
       "--config.node-linker=hoisted",
       "--filter",
@@ -44,7 +55,38 @@ try {
       "--tag",
       "latest",
       "--no-git-checks",
-    ]);
+    ],
+    { encoding: "utf8" },
+  );
+  process.stdout.write(result.stdout ?? "");
+  process.stderr.write(result.stderr ?? "");
+  if (result.status === 0) {
+    return;
+  }
+
+  const output = `${result.stdout ?? ""}\n${result.stderr ?? ""}`;
+  if (!STAGED_VERSION_CONFLICT_PATTERN.test(output)) {
+    throw new Error(`publishing ${packageName}@${releaseVersion} failed`);
+  }
+
+  process.stdout.write(
+    `publish: ${packageName}@${releaseVersion} is staged; waiting for registry processing\n`,
+  );
+  await waitForStagedVersion(packageName);
+}
+
+run("corepack", ["pnpm", "run", "build"]);
+run("corepack", ["pnpm", "run", "package:check"]);
+
+try {
+  run(process.execPath, ["scripts/sync-package-docs.mjs"]);
+  for (const packageName of releasePackages) {
+    const packument = await fetchPackument(packageName);
+    if (packument?.versions?.[releaseVersion] !== undefined) {
+      process.stdout.write(`publish: ${packageName}@${releaseVersion} already exists\n`);
+      continue;
+    }
+    await publishPackage(packageName);
   }
 } finally {
   run(process.execPath, ["scripts/sync-package-docs.mjs", "--clean"]);
