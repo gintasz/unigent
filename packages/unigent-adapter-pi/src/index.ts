@@ -64,9 +64,13 @@ interface PiAgentOptions {
 
 interface PiWiring {
   readonly streamFn: StreamFn;
-  readonly modelRuntime?: ModelRuntime;
   readonly basePrompt: string | undefined;
   readonly nativeTools: readonly AgentTool[];
+}
+
+interface PiRuntimeResources {
+  readonly modelRuntime: ModelRuntime;
+  readonly resourceLoader: ResourceLoader;
 }
 
 const PI_THINKING: ReadonlySet<string> = new Set([
@@ -268,7 +272,19 @@ function resolveModel(modelRuntime: ModelRuntime | undefined, id: string): Model
   return modelRuntime?.getModel(provider, name);
 }
 
-async function buildWiring(options: PiAgentOptions): Promise<PiWiring> {
+async function buildRuntimeResources(options: PiAgentOptions): Promise<PiRuntimeResources> {
+  const modelRuntime = await ModelRuntime.create();
+  return {
+    modelRuntime,
+    resourceLoader: await resourceLoader(options),
+  };
+}
+
+async function buildWiring(
+  options: PiAgentOptions,
+  model: Model<Api>,
+  runtimeResources: () => Promise<PiRuntimeResources>,
+): Promise<PiWiring> {
   if (options.streamFn !== undefined) {
     if ((options.plugins?.length ?? 0) > 0 || (options.skills?.length ?? 0) > 0) {
       throw new AgentConfigError(
@@ -281,18 +297,14 @@ async function buildWiring(options: PiAgentOptions): Promise<PiWiring> {
       nativeTools: options.tools ?? [],
     };
   }
-  const modelRuntime = await ModelRuntime.create();
-  const loader = await resourceLoader(options);
-  const availableModels = await modelRuntime.getAvailable();
-  const seed = availableModels[0] ?? modelRuntime.getModels()[0];
+  const { modelRuntime, resourceLoader: loader } = await runtimeResources();
   const { session } = await createAgentSession({
     modelRuntime,
     resourceLoader: loader,
-    ...(seed === undefined ? {} : { model: seed }),
+    model,
   });
   return {
     streamFn: session.agent.streamFunction,
-    modelRuntime,
     basePrompt: options.basePrompt ?? session.agent.state.systemPrompt,
     nativeTools: options.tools ?? session.agent.state.tools,
   };
@@ -316,24 +328,21 @@ function makeSession(
     thinking: ThinkingLevel,
     tools: AgentTool[],
   ): PiCoreAgent => {
-    if (active === undefined) {
-      active = new PiCoreAgent({
-        initialState: { systemPrompt, model, thinkingLevel: thinking, tools },
-        streamFunction: wiring.streamFn,
-        convertToLlm: (messages: AgentMessage[]): Message[] =>
-          messages.filter(
-            (message): message is Message =>
-              message.role === "user" ||
-              message.role === "assistant" ||
-              message.role === "toolResult",
-          ),
-      });
-      active.state.messages = [...seed];
-      return active;
-    }
-    active.state.systemPrompt = systemPrompt;
-    active.state.thinkingLevel = thinking;
-    active.state.tools = tools;
+    const transcript = (active?.state.messages ?? seed).filter(
+      (message): boolean => message.role !== "system",
+    );
+    active = new PiCoreAgent({
+      initialState: { systemPrompt, model, thinkingLevel: thinking, tools, messages: transcript },
+      streamFn: wiring.streamFn,
+      convertToLlm: (messages: AgentMessage[]): Message[] =>
+        messages.filter(
+          (message): message is Message =>
+            message.role === "system" ||
+            message.role === "user" ||
+            message.role === "assistant" ||
+            message.role === "toolResult",
+        ),
+    });
     return active;
   };
   return {
@@ -374,18 +383,41 @@ function makeSession(
 
 /** Create the Pi agent-SDK backend. */
 export function piAgent(options: PiAgentOptions = {}): Backend {
-  let wiringPromise: Promise<PiWiring> | undefined;
-  const wiring = async (): Promise<PiWiring> => {
-    const pending = wiringPromise ?? buildWiring(options);
-    wiringPromise = pending;
+  let runtimeResourcesPromise: Promise<PiRuntimeResources> | undefined;
+  const runtimeResources = async (): Promise<PiRuntimeResources> => {
+    const pending = runtimeResourcesPromise ?? buildRuntimeResources(options);
+    runtimeResourcesPromise = pending;
     try {
       return await pending;
     } catch (error) {
-      if (wiringPromise === pending) {
-        wiringPromise = undefined;
+      if (runtimeResourcesPromise === pending) {
+        runtimeResourcesPromise = undefined;
       }
       throw error;
     }
+  };
+  const wiringPromises = new Map<Model<Api>, Promise<PiWiring>>();
+  const wiring = async (model: Model<Api>): Promise<PiWiring> => {
+    const pending = wiringPromises.get(model) ?? buildWiring(options, model, runtimeResources);
+    wiringPromises.set(model, pending);
+    try {
+      return await pending;
+    } catch (error) {
+      if (wiringPromises.get(model) === pending) {
+        wiringPromises.delete(model);
+      }
+      throw error;
+    }
+  };
+  const requestedModel = async (modelId: string): Promise<Model<Api> | undefined> => {
+    const overridden = options.resolveModel?.(modelId);
+    if (overridden !== undefined) {
+      return overridden;
+    }
+    if (options.streamFn !== undefined) {
+      return;
+    }
+    return resolveModel((await runtimeResources()).modelRuntime, modelId);
   };
   return {
     name: "pi",
@@ -406,17 +438,16 @@ export function piAgent(options: PiAgentOptions = {}): Backend {
       supportsSessionFork: true,
     },
     openSession: async ({ model: modelId }: BackendSessionOptions): Promise<BackendSession> => {
-      const resolvedWiring = await wiring();
+      const model = await requestedModel(modelId);
+      if (model === undefined) {
+        throw new AgentBackendRejectedError(`unknown Pi model: ${modelId}`);
+      }
+      const resolvedWiring = await wiring(model);
       validateAllowlist(
         "native tool",
         options.nativeTools,
         resolvedWiring.nativeTools.map((tool) => tool.name),
       );
-      const model =
-        options.resolveModel?.(modelId) ?? resolveModel(resolvedWiring.modelRuntime, modelId);
-      if (model === undefined) {
-        throw new AgentBackendRejectedError(`unknown Pi model: ${modelId}`);
-      }
       return makeSession(resolvedWiring, model, options);
     },
   };

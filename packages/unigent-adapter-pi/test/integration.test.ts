@@ -1,9 +1,16 @@
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   createModels,
   fauxAssistantMessage,
   fauxProvider,
   fauxToolCall,
+  getCurrentSystemPrompt,
+  getCurrentTools,
+  InMemoryCredentialStore,
 } from "@earendil-works/pi-ai";
+import { ModelRuntime } from "@earendil-works/pi-coding-agent";
 import {
   AgentConfigError,
   type BackendEvent,
@@ -11,7 +18,7 @@ import {
   type BackendTurnRequest,
 } from "@unigent/core";
 import { exerciseBackendContract } from "@unigent/test";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { type PiAgentOptions, piAgent } from "../src/index.ts";
 
 function setup(
@@ -69,7 +76,7 @@ describe("Pi backend integration", () => {
     let cleanPrompt: string | undefined;
     const clean = setup([
       (context) => {
-        cleanPrompt = context.systemPrompt;
+        cleanPrompt = getCurrentSystemPrompt(context.messages);
         return fauxAssistantMessage("clean");
       },
     ]);
@@ -80,7 +87,7 @@ describe("Pi backend integration", () => {
     const machine = setup(
       [
         (context) => {
-          machinePrompt = context.systemPrompt;
+          machinePrompt = getCurrentSystemPrompt(context.messages);
           return fauxAssistantMessage("machine");
         },
       ],
@@ -128,15 +135,15 @@ describe("Pi backend integration", () => {
     };
     const { backend, model } = setup([
       (context) => {
-        toolSurfaces.push((context.tools ?? []).map((candidate) => candidate.name));
+        toolSurfaces.push(getCurrentTools(context.messages).map((candidate) => candidate.name));
         return fauxAssistantMessage("first");
       },
       (context) => {
-        toolSurfaces.push((context.tools ?? []).map((candidate) => candidate.name));
+        toolSurfaces.push(getCurrentTools(context.messages).map((candidate) => candidate.name));
         return fauxAssistantMessage([fauxToolCall("finish", {})], { stopReason: "toolUse" });
       },
       (context) => {
-        toolSurfaces.push((context.tools ?? []).map((candidate) => candidate.name));
+        toolSurfaces.push(getCurrentTools(context.messages).map((candidate) => candidate.name));
         return fauxAssistantMessage("third");
       },
     ]);
@@ -223,6 +230,92 @@ describe("Pi backend integration", () => {
     await expect(session.runTurn(request("recover"))).resolves.toMatchObject({
       text: "recovered",
     });
+  });
+
+  it("builds and caches native tools for each resolved model", async () => {
+    const faux = fauxProvider({
+      models: [
+        { id: "text-only", input: ["text"] },
+        { id: "vision", input: ["text", "image"] },
+      ],
+    });
+    const modelRuntime = await ModelRuntime.create({
+      credentials: new InMemoryCredentialStore(),
+      modelsPath: null,
+    });
+    modelRuntime.registerNativeProvider(faux.provider);
+    await modelRuntime.refresh({ allowNetwork: false });
+    const modelRuntimeSpy = vi.spyOn(ModelRuntime, "create").mockResolvedValue(modelRuntime);
+    const observedReads: Array<{
+      model: string;
+      hasImage: boolean;
+      reportsUnsupportedImages: boolean;
+    }> = [];
+    let imagePath: string;
+    faux.setResponses([
+      () =>
+        fauxAssistantMessage([fauxToolCall("read", { path: imagePath })], {
+          stopReason: "toolUse",
+        }),
+      (context, _options, _state, model) => {
+        const result = context.messages.at(-1);
+        expect(result?.role).toBe("toolResult");
+        const content = result?.role === "toolResult" ? result.content : [];
+        observedReads.push({
+          model: model.id,
+          hasImage: content.some((part) => part.type === "image"),
+          reportsUnsupportedImages: content.some(
+            (part) =>
+              part.type === "text" && part.text.includes("Current model does not support images"),
+          ),
+        });
+        return fauxAssistantMessage("vision read complete");
+      },
+      () =>
+        fauxAssistantMessage([fauxToolCall("read", { path: imagePath })], {
+          stopReason: "toolUse",
+        }),
+      (context, _options, _state, model) => {
+        const result = context.messages.at(-1);
+        expect(result?.role).toBe("toolResult");
+        const content = result?.role === "toolResult" ? result.content : [];
+        observedReads.push({
+          model: model.id,
+          hasImage: content.some((part) => part.type === "image"),
+          reportsUnsupportedImages: content.some(
+            (part) =>
+              part.type === "text" && part.text.includes("Current model does not support images"),
+          ),
+        });
+        return fauxAssistantMessage("text read complete");
+      },
+    ]);
+    const temporaryDirectory = await mkdtemp(join(tmpdir(), "unigent-pi-model-tools-"));
+    imagePath = join(temporaryDirectory, "pixel.png");
+    const onePixelPng = Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+      "base64",
+    );
+    await writeFile(imagePath, onePixelPng);
+
+    try {
+      const backend = piAgent({
+        nativeTools: ["read"],
+        resolveModel: (modelId) => faux.getModel(modelId),
+      });
+      const visionSession = await backend.openSession({ model: "vision" });
+      await visionSession.runTurn(request("read the image"));
+      const textSession = await backend.openSession({ model: "text-only" });
+      await textSession.runTurn(request("read the image"));
+
+      expect(observedReads).toEqual([
+        { model: "vision", hasImage: true, reportsUnsupportedImages: false },
+        { model: "text-only", hasImage: true, reportsUnsupportedImages: true },
+      ]);
+    } finally {
+      modelRuntimeSpy.mockRestore();
+      await rm(temporaryDirectory, { recursive: true });
+    }
   });
 
   it("propagates Unigent tool failures as Pi tool errors", async () => {
