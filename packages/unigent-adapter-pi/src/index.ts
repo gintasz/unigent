@@ -1,5 +1,4 @@
 import { basename } from "node:path";
-import process from "node:process";
 import {
   type AgentMessage,
   type AgentTool,
@@ -42,6 +41,7 @@ import {
   type BackendTurnRequest,
   type BackendTurnResult,
   type BackendUsage,
+  resolveWorkdir,
 } from "@unigent/core";
 import { Type } from "typebox";
 
@@ -58,6 +58,8 @@ interface PiAgentOptions {
   readonly resolveModel?: (modelId: string) => Model<Api> | undefined;
   readonly basePrompt?: string;
   readonly tools?: readonly AgentTool[];
+  /** Working directory used for resources, skills, plugins, and native tools. */
+  readonly workdir?: string;
   /** Explicit identity for checkpoint invalidation when injected resources change. */
   readonly checkpointKey?: string;
 }
@@ -217,16 +219,15 @@ function pluginName(extension: Extension): string {
   );
 }
 
-async function resourceLoader(options: PiAgentOptions): Promise<ResourceLoader> {
+async function resourceLoader(options: PiAgentOptions, workdir: string): Promise<ResourceLoader> {
   const base = options.base ?? "clean";
   const skills = options.skills ?? (base === "clean" ? [] : undefined);
   const plugins = options.plugins ?? (base === "clean" ? [] : undefined);
-  const cwd = process.cwd();
   const agentDir = getAgentDir();
   const loader = new DefaultResourceLoader({
-    cwd,
+    cwd: workdir,
     agentDir,
-    settingsManager: SettingsManager.create(cwd, agentDir),
+    settingsManager: SettingsManager.create(workdir, agentDir),
     ...(skills !== undefined && skills.length === 0 ? { noSkills: true } : {}),
     ...(skills !== undefined && skills.length > 0
       ? {
@@ -272,17 +273,21 @@ function resolveModel(modelRuntime: ModelRuntime | undefined, id: string): Model
   return modelRuntime?.getModel(provider, name);
 }
 
-async function buildRuntimeResources(options: PiAgentOptions): Promise<PiRuntimeResources> {
+async function buildRuntimeResources(
+  options: PiAgentOptions,
+  workdir: string,
+): Promise<PiRuntimeResources> {
   const modelRuntime = await ModelRuntime.create();
   return {
     modelRuntime,
-    resourceLoader: await resourceLoader(options),
+    resourceLoader: await resourceLoader(options, workdir),
   };
 }
 
 async function buildWiring(
   options: PiAgentOptions,
   model: Model<Api>,
+  workdir: string,
   runtimeResources: () => Promise<PiRuntimeResources>,
 ): Promise<PiWiring> {
   if (options.streamFn !== undefined) {
@@ -299,6 +304,7 @@ async function buildWiring(
   }
   const { modelRuntime, resourceLoader: loader } = await runtimeResources();
   const { session } = await createAgentSession({
+    cwd: workdir,
     modelRuntime,
     resourceLoader: loader,
     model,
@@ -383,9 +389,10 @@ function makeSession(
 
 /** Create the Pi agent-SDK backend. */
 export function piAgent(options: PiAgentOptions = {}): Backend {
+  const workdir = resolveWorkdir(options.workdir);
   let runtimeResourcesPromise: Promise<PiRuntimeResources> | undefined;
   const runtimeResources = async (): Promise<PiRuntimeResources> => {
-    const pending = runtimeResourcesPromise ?? buildRuntimeResources(options);
+    const pending = runtimeResourcesPromise ?? buildRuntimeResources(options, workdir);
     runtimeResourcesPromise = pending;
     try {
       return await pending;
@@ -398,7 +405,8 @@ export function piAgent(options: PiAgentOptions = {}): Backend {
   };
   const wiringPromises = new Map<Model<Api>, Promise<PiWiring>>();
   const wiring = async (model: Model<Api>): Promise<PiWiring> => {
-    const pending = wiringPromises.get(model) ?? buildWiring(options, model, runtimeResources);
+    const pending =
+      wiringPromises.get(model) ?? buildWiring(options, model, workdir, runtimeResources);
     wiringPromises.set(model, pending);
     try {
       return await pending;
@@ -426,6 +434,7 @@ export function piAgent(options: PiAgentOptions = {}): Backend {
       JSON.stringify({
         adapter: "pi-v1",
         base: options.base ?? "clean",
+        workdir,
         nativeTools: options.nativeTools,
         plugins: options.plugins,
         skills: options.skills,

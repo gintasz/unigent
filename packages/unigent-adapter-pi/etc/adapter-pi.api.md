@@ -32,6 +32,7 @@ export interface PiAgentOptions {
     readonly streamFn?: StreamFn;
     // (undocumented)
     readonly tools?: readonly AgentTool[];
+    readonly workdir?: string;
 }
 
 // @public

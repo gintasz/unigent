@@ -26,6 +26,7 @@ interface AdapterProcessOptions {
   readonly signal: AbortSignal;
   readonly stdin: string;
   readonly environment: Readonly<Record<string, string>>;
+  readonly workdir?: string;
 }
 
 /** Spawn one harness CLI with bounded stderr and a completion signal that waits for pipe closure. */
@@ -36,6 +37,7 @@ function spawnAdapterProcess(options: AdapterProcessOptions): AdapterProcess {
     child = spawn(options.binary, [...options.args], {
       stdio: ["pipe", "pipe", "pipe"],
       signal: options.signal,
+      cwd: options.workdir,
       // biome-ignore lint/style/noProcessEnv: child must inherit the authenticated CLI environment.
       env: { ...process.env, ...options.environment },
     });

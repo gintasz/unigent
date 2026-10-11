@@ -1,3 +1,6 @@
+import { mkdtempSync, realpathSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   AgentBackendRejectedError,
   AgentBackendUnavailableError,
@@ -101,6 +104,30 @@ describe("Claude CLI backend integration", () => {
     expect(captured).toContain("bypassPermissions");
     expect(captured).toContain("--disable-slash-commands");
     expect(captured).toContain("sonnet");
+  });
+
+  it("passes one resolved workdir to every Claude process", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "unigent-claude-workdir-"));
+    const canonicalDirectory = realpathSync(directory);
+    const observed: string[] = [];
+    try {
+      const backend = claudeCli({
+        workdir: directory,
+        processFactory: (_args, _signal, _prompt, _environment, workdir) => {
+          observed.push(workdir);
+          return lineProcess(completed("workdir-session"));
+        },
+      });
+      const session = await backend.openSession({ model: "sonnet" });
+
+      await session.runTurn(request());
+      await session.runTurn(request());
+
+      expect(observed).toEqual([canonicalDirectory, canonicalDirectory]);
+      expect(backend.checkpointKey).toContain(canonicalDirectory);
+    } finally {
+      rmSync(directory, { recursive: true });
+    }
   });
 
   it("applies machine-base category overrides without persistent mutation", async () => {

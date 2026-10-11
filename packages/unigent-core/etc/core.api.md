@@ -38,6 +38,8 @@ export interface AdapterProcessOptions {
     readonly signal: AbortSignal;
     // (undocumented)
     readonly stdin: string;
+    // (undocumented)
+    readonly workdir?: string;
 }
 
 // @public
@@ -514,6 +516,9 @@ export type JsonSchema = Readonly<Record<string, unknown>>;
 
 // @public
 export type OutputSchema<Output> = StandardSchemaV1<unknown, Output>;
+
+// @public
+export function resolveWorkdir(workdir: string | undefined): string;
 
 // @public
 export type SourceToolFunction = (...args: never[]) => unknown;

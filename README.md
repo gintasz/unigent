@@ -538,6 +538,19 @@ const claude = claudeCli();
 const codex = codexCli();
 ```
 
+Set `workdir` on any adapter to give its sessions an explicit working directory without changing
+the host process's global current directory:
+
+```typescript
+const project = "/absolute/path/to/project";
+const pi = piAgent({ workdir: project });
+const claude = claudeCli({ workdir: project });
+const codex = codexCli({ workdir: project });
+```
+
+Relative paths are resolved once when the adapter is created. Missing paths and non-directories
+fail immediately with `AgentConfigError`.
+
 All three adapters default to `base: "clean"`, which starts without the machine's prompt,
 plugins, skills, hooks, or MCP configuration. Authentication, model configuration, and each
 harness's native tools remain available unless you restrict them. Set `base: "machine"` to inherit

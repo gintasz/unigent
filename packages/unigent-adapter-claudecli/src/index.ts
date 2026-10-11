@@ -14,6 +14,7 @@ import {
   type BackendSessionOptions,
   type BackendTurnRequest,
   type BackendTurnResult,
+  resolveWorkdir as resolveClaudeWorkdir,
 } from "@unigent/core";
 import { startMcpToolServer } from "@unigent/core/mcp";
 import { type ClaudeProcess, type ClaudeProcessFactory, spawnClaude } from "./process.js";
@@ -36,6 +37,8 @@ interface InstalledPlugin {
 /** Claude CLI backend options. */
 interface ClaudeCliOptions {
   readonly base?: ClaudeBase;
+  /** Working directory used by the CLI process and its native tools. */
+  readonly workdir?: string;
   readonly nativeTools?: readonly string[];
   readonly mcpServers?: DisableOnly;
   readonly plugins?: readonly string[];
@@ -357,6 +360,7 @@ async function drain(
   options: ClaudeCliOptions,
   loadInstalledPlugins: InstalledPluginLoader,
   model: string,
+  workdir: string,
   session: { readonly id?: string; readonly resume?: string; readonly fork?: boolean },
 ): Promise<{ readonly result: BackendTurnResult; readonly sessionId?: string }> {
   throwIfClaudeCancelled(request.signal);
@@ -380,8 +384,8 @@ async function drain(
     };
     const claudeProcess =
       options.processFactory === undefined
-        ? spawnClaude(args, request.signal, request.prompt, environment, options.binary)
-        : options.processFactory(args, request.signal, request.prompt, environment);
+        ? spawnClaude(args, request.signal, request.prompt, environment, options.binary, workdir)
+        : options.processFactory(args, request.signal, request.prompt, environment, workdir);
     await consumeClaudeOutput(reader, claudeProcess);
     throwIfClaudeCancelled(request.signal);
     return settledClaudeResult(reader, claudeProcess.stderr());
@@ -397,6 +401,7 @@ function makeSession(
   options: ClaudeCliOptions,
   loadInstalledPlugins: InstalledPluginLoader,
   model: string,
+  workdir: string,
   seed?: string,
 ): BackendSession {
   let current = seed;
@@ -404,7 +409,7 @@ function makeSession(
   return {
     runTurn: async (request: BackendTurnRequest): Promise<BackendTurnResult> => {
       const freshId = current === undefined ? randomUUID() : undefined;
-      const settled = await drain(request, options, loadInstalledPlugins, model, {
+      const settled = await drain(request, options, loadInstalledPlugins, model, workdir, {
         ...(freshId === undefined ? {} : { id: freshId }),
         ...(current === undefined ? {} : { resume: current }),
         ...(forkOnNext ? { fork: true } : {}),
@@ -413,13 +418,15 @@ function makeSession(
       forkOnNext = false;
       return settled.result;
     },
-    fork: (): BackendSession => makeSession(options, loadInstalledPlugins, model, current ?? seed),
+    fork: (): BackendSession =>
+      makeSession(options, loadInstalledPlugins, model, workdir, current ?? seed),
   };
 }
 
 /** Create a Claude CLI backend. Clean ambient configuration is the default. */
 export function claudeCli(options: ClaudeCliOptions = {}): Backend {
   validateOptions(options);
+  const workdir = resolveClaudeWorkdir(options.workdir);
   const loadInstalledPlugins = installedPluginLoader(options);
   return {
     name: "claude-cli",
@@ -428,6 +435,7 @@ export function claudeCli(options: ClaudeCliOptions = {}): Backend {
       JSON.stringify({
         adapter: "claude-cli-v1",
         base: options.base ?? "clean",
+        workdir,
         nativeTools: options.nativeTools,
         mcpServers: options.mcpServers,
         plugins: options.plugins,
@@ -445,7 +453,7 @@ export function claudeCli(options: ClaudeCliOptions = {}): Backend {
       if (model.trim().length === 0) {
         throw new AgentBackendRejectedError("Claude model must be non-empty");
       }
-      return makeSession(options, loadInstalledPlugins, model);
+      return makeSession(options, loadInstalledPlugins, model, workdir);
     },
   };
 }

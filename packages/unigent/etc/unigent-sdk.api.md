@@ -475,6 +475,7 @@ export interface ClaudeCliOptions {
     readonly processFactory?: ClaudeProcessFactory;
     // (undocumented)
     readonly skills?: DisableOnly$1;
+    readonly workdir?: string;
 }
 
 // @public
@@ -582,6 +583,7 @@ export interface PiAgentOptions {
     readonly nativeTools?: readonly string[];
     readonly plugins?: readonly string[];
     readonly skills?: readonly string[];
+    readonly workdir?: string;
 }
 
 // @public

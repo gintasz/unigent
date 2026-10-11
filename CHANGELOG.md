@@ -6,6 +6,14 @@ All notable changes to Unigent are recorded here. This project follows
 
 ## [Unreleased]
 
+## [0.1.12] - 2026-10-11
+
+- Add a validated `workdir` option to the Pi, Claude CLI, and Codex CLI adapters, covering Pi
+  resources and native tools, CLI subprocesses, resumed turns, session forks, and checkpoint
+  identity without changing the host process's global current directory.
+- Tolerate npm's staged-version state and wait longer for registry propagation so successful
+  trusted publishes do not produce false release failures.
+
 ## [0.1.11] - 2026-10-08
 
 - Resolve the requested Pi model before creating its native tools and cache wiring per resolved
@@ -90,7 +98,8 @@ All notable changes to Unigent are recorded here. This project follows
 
 - Attempted initial release; withdrawn after the SDK package name was rejected.
 
-[Unreleased]: https://github.com/gintasz/unigent/compare/v0.1.11...HEAD
+[Unreleased]: https://github.com/gintasz/unigent/compare/v0.1.12...HEAD
+[0.1.12]: https://github.com/gintasz/unigent/compare/v0.1.11...v0.1.12
 [0.1.11]: https://github.com/gintasz/unigent/compare/v0.1.10...v0.1.11
 [0.1.10]: https://github.com/gintasz/unigent/compare/v0.1.9...v0.1.10
 [0.1.9]: https://github.com/gintasz/unigent/compare/v0.1.8...v0.1.9

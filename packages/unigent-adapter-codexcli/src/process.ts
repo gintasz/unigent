@@ -20,6 +20,7 @@ type CodexProcessFactory = (
   signal: AbortSignal,
   prompt: string,
   environment: Readonly<Record<string, string>>,
+  workdir: string,
 ) => CodexProcess;
 
 /** Complete CLI configuration for one Codex turn. */
@@ -108,8 +109,16 @@ function spawnCodex(
   prompt: string,
   environment: Readonly<Record<string, string>>,
   binary = process.platform === "win32" ? "codex.cmd" : "codex",
+  workdir?: string,
 ): CodexProcess {
-  return spawnAdapterProcess({ binary, args, signal, stdin: prompt, environment });
+  return spawnAdapterProcess({
+    binary,
+    args,
+    signal,
+    stdin: prompt,
+    environment,
+    ...(workdir === undefined ? {} : { workdir }),
+  });
 }
 
 export type { CodexProcess, CodexProcessCompletion, CodexProcessFactory, CodexTurnSpec };

@@ -251,7 +251,7 @@ describe("Pi backend integration", () => {
       hasImage: boolean;
       reportsUnsupportedImages: boolean;
     }> = [];
-    let imagePath: string;
+    const imagePath = "pixel.png";
     faux.setResponses([
       () =>
         fauxAssistantMessage([fauxToolCall("read", { path: imagePath })], {
@@ -291,15 +291,15 @@ describe("Pi backend integration", () => {
       },
     ]);
     const temporaryDirectory = await mkdtemp(join(tmpdir(), "unigent-pi-model-tools-"));
-    imagePath = join(temporaryDirectory, "pixel.png");
     const onePixelPng = Buffer.from(
       "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
       "base64",
     );
-    await writeFile(imagePath, onePixelPng);
+    await writeFile(join(temporaryDirectory, imagePath), onePixelPng);
 
     try {
       const backend = piAgent({
+        workdir: temporaryDirectory,
         nativeTools: ["read"],
         resolveModel: (modelId) => faux.getModel(modelId),
       });
@@ -312,6 +312,7 @@ describe("Pi backend integration", () => {
         { model: "vision", hasImage: true, reportsUnsupportedImages: false },
         { model: "text-only", hasImage: true, reportsUnsupportedImages: true },
       ]);
+      expect(backend.checkpointKey).toContain(temporaryDirectory);
     } finally {
       modelRuntimeSpy.mockRestore();
       await rm(temporaryDirectory, { recursive: true });

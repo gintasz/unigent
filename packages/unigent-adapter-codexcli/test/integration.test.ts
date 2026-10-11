@@ -1,3 +1,6 @@
+import { mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   AgentBackendRejectedError,
   AgentBackendUnavailableError,
@@ -82,6 +85,37 @@ describe("Codex CLI backend integration", () => {
     expect(captured).toContain("--ignore-rules");
     expect(captured).toContain("features.shell_tool=false");
     expect(captured).toContain('web_search="disabled"');
+  });
+
+  it("passes one resolved workdir to every Codex process and session fork", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "unigent-codex-workdir-"));
+    const canonicalDirectory = realpathSync(directory);
+    const processWorkdirs: string[] = [];
+    const forkWorkdirs: string[] = [];
+    try {
+      const backend = codexCli({
+        workdir: directory,
+        forkSession: (_sessionId, workdir) => {
+          forkWorkdirs.push(workdir);
+          return "forked-workdir-session";
+        },
+        processFactory: (_args, _signal, _prompt, _environment, workdir) => {
+          processWorkdirs.push(workdir);
+          return lineProcess(completed("workdir-session", "ok"));
+        },
+      });
+      const session = await backend.openSession({ model: "gpt-5.5-codex" });
+      await session.runTurn(request());
+      const branch = session.fork?.();
+
+      await branch?.runTurn(request());
+
+      expect(processWorkdirs).toEqual([canonicalDirectory, canonicalDirectory]);
+      expect(forkWorkdirs).toEqual([canonicalDirectory]);
+      expect(backend.checkpointKey).toContain(canonicalDirectory);
+    } finally {
+      rmSync(directory, { recursive: true });
+    }
   });
 
   it("loads machine-mode developer instructions from an isolated profile", async () => {
@@ -261,6 +295,3 @@ describe("Codex CLI backend integration", () => {
     await expect(session.runTurn(request())).rejects.toBeInstanceOf(AgentBackendRejectedError);
   });
 });
-
-import { readFileSync } from "node:fs";
-import { join } from "node:path";

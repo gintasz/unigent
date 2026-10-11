@@ -10,6 +10,8 @@ type PiBase = "clean" | "machine";
 interface PiAgentOptions {
   /** Resource baseline loaded from the machine. */
   readonly base?: PiBase;
+  /** Working directory used for resources, skills, plugins, and native tools. */
+  readonly workdir?: string;
   /** Native Pi tools to expose; an empty list disables all native tools. */
   readonly nativeTools?: readonly string[];
   /** Machine plugin names to load. */

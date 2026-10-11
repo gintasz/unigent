@@ -59,3 +59,4 @@ export type { SourceToolFunction, ToolDefinition, ToolOptions } from "./tool.js"
 export { tool } from "./tool.js";
 export type { AgentUsage } from "./usage.js";
 export { combineUsage } from "./usage.js";
+export { resolveWorkdir } from "./workdir.js";

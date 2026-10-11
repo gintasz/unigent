@@ -17,6 +17,7 @@ export type ClaudeProcessFactory = (
   signal: AbortSignal,
   prompt: string,
   environment: Readonly<Record<string, string>>,
+  workdir: string,
 ) => ClaudeProcess;
 
 /** Launch Claude and expose its stream-json stdout as lines. */
@@ -26,6 +27,14 @@ export function spawnClaude(
   prompt: string,
   environment: Readonly<Record<string, string>>,
   binary = process.platform === "win32" ? "claude.cmd" : "claude",
+  workdir?: string,
 ): ClaudeProcess {
-  return spawnAdapterProcess({ binary, args, signal, stdin: prompt, environment });
+  return spawnAdapterProcess({
+    binary,
+    args,
+    signal,
+    stdin: prompt,
+    environment,
+    ...(workdir === undefined ? {} : { workdir }),
+  });
 }

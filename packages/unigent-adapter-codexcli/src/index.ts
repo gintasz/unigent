@@ -13,6 +13,7 @@ import {
   type BackendSessionOptions,
   type BackendTurnRequest,
   type BackendTurnResult,
+  resolveWorkdir,
 } from "@unigent/core";
 import { startMcpToolServer } from "@unigent/core/mcp";
 import { forkCodexSession } from "./fork.js";
@@ -255,9 +256,9 @@ async function runCodexTurn(
   model: string,
   identity: TurnIdentity,
   request: BackendTurnRequest,
+  workdir: string,
 ): Promise<{ readonly result: BackendTurnResult; readonly sessionId?: string }> {
   throwIfCodexCancelled(request.signal);
-  const workdir = options.workdir ?? process.cwd();
   const disabledSkills = resolveDisabledSkillPaths(options, workdir);
   const server = await startMcpToolServer(request.tools);
   let instructions: ReturnType<typeof instructionFile> | undefined;
@@ -289,8 +290,8 @@ async function runCodexTurn(
     };
     const codexProcess =
       options.processFactory === undefined
-        ? spawnCodex(args, request.signal, request.prompt, environment, options.binary)
-        : factory(args, request.signal, request.prompt, environment);
+        ? spawnCodex(args, request.signal, request.prompt, environment, options.binary, workdir)
+        : factory(args, request.signal, request.prompt, environment, workdir);
     await consumeCodexProcess(reader, codexProcess);
     throwIfCodexCancelled(request.signal);
     return settledResult(reader, codexProcess.stderr());
@@ -303,10 +304,14 @@ async function runCodexTurn(
   }
 }
 
-function makeSession(options: CodexCliOptions, model: string, seed?: string): BackendSession {
+function makeSession(
+  options: CodexCliOptions,
+  model: string,
+  workdir: string,
+  seed?: string,
+): BackendSession {
   let currentSessionId = seed;
   let forkOnNextTurn = seed !== undefined;
-  const workdir = options.workdir ?? process.cwd();
   return {
     runTurn: async (request: BackendTurnRequest): Promise<BackendTurnResult> => {
       if (forkOnNextTurn && currentSessionId !== undefined) {
@@ -327,11 +332,12 @@ function makeSession(options: CodexCliOptions, model: string, seed?: string): Ba
           ...(currentSessionId === undefined ? {} : { resumeSessionId: currentSessionId }),
         },
         request,
+        workdir,
       );
       currentSessionId = settled.sessionId ?? currentSessionId;
       return settled.result;
     },
-    fork: (): BackendSession => makeSession(options, model, currentSessionId),
+    fork: (): BackendSession => makeSession(options, model, workdir, currentSessionId),
   };
 }
 
@@ -343,6 +349,7 @@ function codexCli(options: CodexCliOptions = {}): Backend {
   if (options.permissions !== undefined && !["bypass", "cli"].includes(options.permissions)) {
     throw new AgentConfigError(`unsupported Codex permissions mode: ${options.permissions}`);
   }
+  const workdir = resolveWorkdir(options.workdir);
   return {
     name: "codex-cli",
     checkpointKey:
@@ -352,7 +359,7 @@ function codexCli(options: CodexCliOptions = {}): Backend {
         base: options.base ?? "clean",
         nativeTools: options.nativeTools,
         skills: options.skills,
-        workdir: options.workdir,
+        workdir,
         binary: options.binary,
         permissions: options.permissions ?? "bypass",
         extraArgs: options.extraArgs,
@@ -365,7 +372,7 @@ function codexCli(options: CodexCliOptions = {}): Backend {
       if (model.trim().length === 0) {
         throw new AgentBackendRejectedError("Codex model must be non-empty");
       }
-      return makeSession(options, model);
+      return makeSession(options, model, workdir);
     },
   };
 }

@@ -44,7 +44,7 @@ export type CodexProcess = AdapterProcess;
 export type CodexProcessCompletion = AdapterProcessCompletion;
 
 // @public
-export type CodexProcessFactory = (args: readonly string[], signal: AbortSignal, prompt: string, environment: Readonly<Record<string, string>>) => CodexProcess;
+export type CodexProcessFactory = (args: readonly string[], signal: AbortSignal, prompt: string, environment: Readonly<Record<string, string>>, workdir: string) => CodexProcess;
 
 // @public
 export interface CodexSkill {

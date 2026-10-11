@@ -37,6 +37,7 @@ export interface ClaudeCliOptions {
     readonly processFactory?: ClaudeProcessFactory;
     // (undocumented)
     readonly skills?: DisableOnly;
+    readonly workdir?: string;
 }
 
 // @public
@@ -46,7 +47,7 @@ export type ClaudeProcess = AdapterProcess;
 export type ClaudeProcessCompletion = AdapterProcessCompletion;
 
 // @public
-export type ClaudeProcessFactory = (args: readonly string[], signal: AbortSignal, prompt: string, environment: Readonly<Record<string, string>>) => ClaudeProcess;
+export type ClaudeProcessFactory = (args: readonly string[], signal: AbortSignal, prompt: string, environment: Readonly<Record<string, string>>, workdir: string) => ClaudeProcess;
 
 // @public (undocumented)
 export type DisableOnly = readonly [];
