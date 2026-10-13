@@ -1,4 +1,11 @@
-import { mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -9,7 +16,7 @@ import {
   type BackendTurnRequest,
 } from "@unigent/core";
 import { exerciseBackendContract } from "@unigent/test";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { type CodexProcess, type CodexProcessFactory, codexCli } from "../src/index.ts";
 
 function lineProcess(lines: readonly string[]): CodexProcess {
@@ -83,8 +90,33 @@ describe("Codex CLI backend integration", () => {
 
     expect(captured).toContain("--ignore-user-config");
     expect(captured).toContain("--ignore-rules");
+    expect(captured).toContain("project_doc_max_bytes=0");
     expect(captured).toContain("features.shell_tool=false");
     expect(captured).toContain('web_search="disabled"');
+  });
+
+  it("isolates clean turns from global Codex instructions while retaining authentication", async () => {
+    const sourceHome = mkdtempSync(join(tmpdir(), "unigent-codex-source-home-"));
+    writeFileSync(join(sourceHome, "AGENTS.md"), "GLOBAL INSTRUCTIONS");
+    writeFileSync(join(sourceHome, "auth.json"), '{"token":"test"}');
+    vi.stubEnv("CODEX_HOME", sourceHome);
+    try {
+      const backend = codexCli({
+        processFactory: (_args, _signal, _prompt, environment) => {
+          const isolatedHome = environment["CODEX_HOME"] ?? "";
+          expect(isolatedHome).not.toBe(sourceHome);
+          expect(existsSync(join(isolatedHome, "AGENTS.md"))).toBe(false);
+          expect(readFileSync(join(isolatedHome, "auth.json"), "utf8")).toBe('{"token":"test"}');
+          return lineProcess(completed("clean-home-session", "ok"));
+        },
+      });
+
+      const session = await backend.openSession({ model: "gpt-5.5-codex" });
+      await session.runTurn(request());
+    } finally {
+      vi.unstubAllEnvs();
+      rmSync(sourceHome, { recursive: true });
+    }
   });
 
   it("passes one resolved workdir to every Codex process and session fork", async () => {

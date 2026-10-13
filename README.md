@@ -552,9 +552,10 @@ Relative paths are resolved once when the adapter is created. Missing paths and 
 fail immediately with `AgentConfigError`.
 
 All three adapters default to `base: "clean"`, which starts without the machine's prompt,
-plugins, skills, hooks, or MCP configuration. Authentication, model configuration, and each
-harness's native tools remain available unless you restrict them. Set `base: "machine"` to inherit
-ambient harness configuration.
+plugins, skills, hooks, or MCP configuration. For Codex, this also excludes global and project
+`AGENTS.md` instructions while retaining authentication. Authentication, model configuration, and
+each harness's native tools remain available unless you restrict them. Set `base: "machine"` to
+inherit ambient harness configuration.
 
 | Capability | Pi agent SDK | Claude CLI | Codex CLI |
 | --- | --- | --- | --- |

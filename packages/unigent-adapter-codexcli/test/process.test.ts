@@ -17,6 +17,7 @@ describe("Codex CLI argument mapping", () => {
     expect(args.slice(0, 2)).toEqual(["exec", "--json"]);
     expect(args).toContain("--ignore-user-config");
     expect(args).toContain("--ignore-rules");
+    expect(args).toContain("project_doc_max_bytes=0");
     expect(args).toContain("--dangerously-bypass-approvals-and-sandbox");
     expect(args).toContain('mcp_servers.unigent.url="http://127.0.0.1:4000/mcp"');
     expect(args).toContain('mcp_servers.unigent.bearer_token_env_var="UNIGENT_MCP_TOKEN"');

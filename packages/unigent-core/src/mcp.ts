@@ -99,7 +99,7 @@ async function handleRequest(
   allowedHost: string,
 ): Promise<void> {
   const mcp = new ProtocolServer(
-    { name: "unigent", version: "0.1.12" },
+    { name: "unigent", version: "0.1.13" },
     { capabilities: { tools: {} } },
   );
   registerTools(mcp, tools);

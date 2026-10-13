@@ -60,7 +60,14 @@ function commonArgs(spec: CodexTurnSpec): string[] {
     args.splice(2, 0, "--dangerously-bypass-approvals-and-sandbox");
   }
   if (spec.clean) {
-    args.push("--ignore-user-config", "--ignore-rules", "-c", "features.hooks=false");
+    args.push(
+      "--ignore-user-config",
+      "--ignore-rules",
+      "-c",
+      "features.hooks=false",
+      "-c",
+      "project_doc_max_bytes=0",
+    );
   }
   if (spec.disableNativeTools) {
     args.push("-c", "features.shell_tool=false", "-c", configValue("web_search", "disabled"));

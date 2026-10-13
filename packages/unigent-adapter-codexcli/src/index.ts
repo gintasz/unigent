@@ -60,11 +60,15 @@ interface TurnIdentity {
   readonly profileName?: string;
 }
 
-interface CodexProfileHome {
+interface TemporaryCodexHome {
   readonly path: string;
-  readonly profileName: string;
+  readonly profileName?: string;
   readonly dispose: () => void;
 }
+
+type TemporaryCodexHomePurpose =
+  | { readonly kind: "clean" }
+  | { readonly kind: "machine-profile"; readonly developerInstructions: string };
 
 function isClean(options: CodexCliOptions): boolean {
   return (options.base ?? "clean") === "clean";
@@ -103,13 +107,15 @@ function codexHome(): string {
   return process.env["CODEX_HOME"] ?? join(homedir(), ".codex");
 }
 
-function temporaryProfileHome(developerInstructions: string): CodexProfileHome {
+function temporaryCodexHome(purpose: TemporaryCodexHomePurpose): TemporaryCodexHome {
   const sourceHome = codexHome();
   const directory = mkdtempSync(join(tmpdir(), "unigent-codex-home-"));
-  const profileName = `unigent-${randomUUID()}`;
   try {
     if (existsSync(sourceHome)) {
       for (const entry of readdirSync(sourceHome, { withFileTypes: true })) {
+        if (purpose.kind === "clean" && entry.name === "AGENTS.md") {
+          continue;
+        }
         symlinkSync(
           join(sourceHome, entry.name),
           join(directory, entry.name),
@@ -117,17 +123,24 @@ function temporaryProfileHome(developerInstructions: string): CodexProfileHome {
         );
       }
     }
-    writeFileSync(
-      join(directory, `${profileName}.config.toml`),
-      `developer_instructions = ${JSON.stringify(developerInstructions)}\n`,
-    );
+    if (purpose.kind === "machine-profile") {
+      const profileName = `unigent-${randomUUID()}`;
+      writeFileSync(
+        join(directory, `${profileName}.config.toml`),
+        `developer_instructions = ${JSON.stringify(purpose.developerInstructions)}\n`,
+      );
+      return {
+        path: directory,
+        profileName,
+        dispose: (): void => rmSync(directory, { recursive: true, force: true }),
+      };
+    }
   } catch (error) {
     rmSync(directory, { recursive: true, force: true });
     throw error;
   }
   return {
     path: directory,
-    profileName,
     dispose: (): void => rmSync(directory, { recursive: true, force: true }),
   };
 }
@@ -262,14 +275,20 @@ async function runCodexTurn(
   const disabledSkills = resolveDisabledSkillPaths(options, workdir);
   const server = await startMcpToolServer(request.tools);
   let instructions: ReturnType<typeof instructionFile> | undefined;
-  let profileHome: CodexProfileHome | undefined;
+  let homeOverride: TemporaryCodexHome | undefined;
   try {
     throwIfCodexCancelled(request.signal);
     instructions = instructionsRequired(options, request)
       ? instructionFile(request.systemPrompt)
       : undefined;
-    profileHome =
-      instructions === undefined ? temporaryProfileHome(request.systemPrompt) : undefined;
+    if (isClean(options)) {
+      homeOverride = temporaryCodexHome({ kind: "clean" });
+    } else if (instructions === undefined) {
+      homeOverride = temporaryCodexHome({
+        kind: "machine-profile",
+        developerInstructions: request.systemPrompt,
+      });
+    }
     const reader = new CodexStreamReader(request.onEvent);
     const factory = options.processFactory ?? spawnCodex;
     const args = makeTurnArgs(
@@ -277,7 +296,9 @@ async function runCodexTurn(
       model,
       {
         ...identity,
-        ...(profileHome === undefined ? {} : { profileName: profileHome.profileName }),
+        ...(homeOverride?.profileName === undefined
+          ? {}
+          : { profileName: homeOverride.profileName }),
       },
       request,
       server.url,
@@ -286,7 +307,7 @@ async function runCodexTurn(
     );
     const environment = {
       [MCP_TOKEN_ENVIRONMENT_VARIABLE]: server.authorizationHeader.slice("Bearer ".length),
-      ...(profileHome === undefined ? {} : { CODEX_HOME: profileHome.path }),
+      ...(homeOverride === undefined ? {} : { CODEX_HOME: homeOverride.path }),
     };
     const codexProcess =
       options.processFactory === undefined
@@ -299,7 +320,7 @@ async function runCodexTurn(
     throw codexBoundaryError(error, request.signal.aborted);
   } finally {
     instructions?.dispose();
-    profileHome?.dispose();
+    homeOverride?.dispose();
     await server.close();
   }
 }

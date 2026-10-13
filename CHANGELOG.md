@@ -6,6 +6,13 @@ All notable changes to Unigent are recorded here. This project follows
 
 ## [Unreleased]
 
+## [0.1.13] - 2026-10-13
+
+- Make Codex `base: "clean"` exclude global and project `AGENTS.md` instructions while preserving
+  the authenticated Codex state needed to run.
+- Pin Pi codemode to the version required by the current Pi coding-agent dependency so fresh npm
+  installs cannot resolve an incompatible minor release.
+
 ## [0.1.12] - 2026-10-11
 
 - Add a validated `workdir` option to the Pi, Claude CLI, and Codex CLI adapters, covering Pi
@@ -98,7 +105,8 @@ All notable changes to Unigent are recorded here. This project follows
 
 - Attempted initial release; withdrawn after the SDK package name was rejected.
 
-[Unreleased]: https://github.com/gintasz/unigent/compare/v0.1.12...HEAD
+[Unreleased]: https://github.com/gintasz/unigent/compare/v0.1.13...HEAD
+[0.1.13]: https://github.com/gintasz/unigent/compare/v0.1.12...v0.1.13
 [0.1.12]: https://github.com/gintasz/unigent/compare/v0.1.11...v0.1.12
 [0.1.11]: https://github.com/gintasz/unigent/compare/v0.1.10...v0.1.11
 [0.1.10]: https://github.com/gintasz/unigent/compare/v0.1.9...v0.1.10
